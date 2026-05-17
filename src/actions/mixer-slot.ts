@@ -37,6 +37,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	private readonly dialRenderStateByContext = new Map<string, DialRenderState>();
 
 	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<MixerSlotSettings>): Promise<void> {
+		await ensureGlobalSettingsLoaded();
 		this.registerAction(ev.action);
 		await this.render(ev.action);
 	}
@@ -75,6 +76,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	}
 
 	public override async onWillAppear(ev: WillAppearEvent<MixerSlotSettings>): Promise<void> {
+		await ensureGlobalSettingsLoaded();
 		this.registerAction(ev.action);
 		await this.render(ev.action);
 	}
@@ -94,6 +96,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	}
 
 	private async render(action: MixerSlotActionInstance): Promise<void> {
+		await ensureGlobalSettingsLoaded();
 		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action));
 		if (!view.session) {
 			if (action.isDial()) {
