@@ -1,6 +1,7 @@
 {
     "type": "module",
     "scripts": {
+        "icons": "node scripts/generate-plugin-icons.ts",
         "build": "npm run build:helper && rollup -c",
         "build:helper": "dotnet publish helper/LevCon.AudioHelper/LevCon.AudioHelper.csproj -c Release -r win-x64 --self-contained false -o com.david-valachovic.levcon.sdPlugin/bin/audio-helper",
         "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.david-valachovic.levcon\""
@@ -14,6 +15,7 @@
         "@tsconfig/node20": "^20.1.2",
         "@types/node": "~24.1.0",
         "rollup": "^4.0.2",
+        "sharp": "^0.34.5",
         "tslib": "^2.6.2",
         "typescript": "^5.2.2"
     },
