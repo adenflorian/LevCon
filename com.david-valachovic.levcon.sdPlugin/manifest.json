@@ -9,6 +9,7 @@
 			"Icon": "imgs/plugin/category-icon",
 			"Tooltip": "Displays a paged application volume slot.",
 			"PropertyInspectorPath": "ui/mixer-slot.html",
+			"UserTitleEnabled": false,
 			"Controllers": [
 				"Keypad",
 				"Encoder"
@@ -16,6 +17,7 @@
 			"States": [
 				{
 					"Image": "imgs/plugin/category-icon",
+					"ShowTitle": false,
 					"TitleAlignment": "middle"
 				}
 			]
@@ -26,12 +28,14 @@
 			"Icon": "imgs/plugin/category-icon",
 			"Tooltip": "Shows the previous page of app volume slots.",
 			"PropertyInspectorPath": "ui/mixer-page.html",
+			"UserTitleEnabled": false,
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
 					"Image": "imgs/plugin/category-icon",
+					"ShowTitle": false,
 					"TitleAlignment": "middle"
 				}
 			]
@@ -42,12 +46,14 @@
 			"Icon": "imgs/plugin/category-icon",
 			"Tooltip": "Shows the next page of app volume slots.",
 			"PropertyInspectorPath": "ui/mixer-page.html",
+			"UserTitleEnabled": false,
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
 					"Image": "imgs/plugin/category-icon",
+					"ShowTitle": false,
 					"TitleAlignment": "middle"
 				}
 			]
