@@ -13,6 +13,8 @@ export const MIXER_SLOT_UUID = "com.david-valachovic.levcon.mixer.slot";
 const DIAL_LAYOUT = "layouts/mixer-slot.json";
 const DEFAULT_STEP_SIZE = 5;
 const DEFAULT_VISIBILITY: SessionVisibility = "all";
+const KEY_CANVAS_SIZE = 144;
+const KEY_ICON_SIZE_PERCENT = 80;
 
 type MixerSlotActionInstance = DialAction<MixerSlotSettings> | KeyAction<MixerSlotSettings>;
 type DialRenderState = {
@@ -435,13 +437,27 @@ function renderKeySvg(
 	const iconOpacity = muted ? (inactive ? "0.38" : "0.5") : (inactive ? "0.62" : "1");
 	const filter = inactive ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
 	const filterAttribute = inactive ? ' filter="url(#inactive-icon)"' : '';
+	const keyIconSize = percentOfCanvas(KEY_ICON_SIZE_PERCENT);
+	const keyIconOffset = centeredCanvasOffset(keyIconSize);
 	const image = icon
-		? `<image href="${icon}" x="32" y="22" width="80" height="80" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet"${filterAttribute} />`
+		? `<image href="${icon}" x="${keyIconOffset}" y="${keyIconOffset}" width="${keyIconSize}" height="${keyIconSize}" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet"${filterAttribute} />`
 		: "";
 	const mutedOverlay = muted ? renderMutedOverlaySvg(28, 86, 68) : '';
 	const label = labelLines.length > 1
-		? `<text x="72" y="98" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="20" font-weight="700">${labelLines[0]}</text><text x="72" y="120" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="20" font-weight="700">${labelLines[1]}</text>`
-		: `<text x="72" y="110" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="22" font-weight="700">${labelLines[0] ?? ""}</text>`;
+		? `
+				<text x="72" y="98" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="26" font-weight="700">
+					${labelLines[0]}
+				</text>
+				<text x="72" y="120" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="26" font-weight="700">
+					${labelLines[1]}
+				</text>
+			`
+		: `
+				<text x="72" y="110" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="26" font-weight="700">
+					${labelLines[0] ?? ""}
+				</text>
+			`
+		;
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
@@ -452,6 +468,14 @@ function renderKeySvg(
 			${label}
 		</svg>
 	`)}`;
+}
+
+function percentOfCanvas(percent: number): number {
+	return (KEY_CANVAS_SIZE * percent) / 100;
+}
+
+function centeredCanvasOffset(size: number): number {
+	return (KEY_CANVAS_SIZE - size) / 2;
 }
 
 function resolveSlotIndex(action: MixerSlotActionInstance, settings: MixerSlotSettings): number {
