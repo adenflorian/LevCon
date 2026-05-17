@@ -20,7 +20,14 @@ type DialRenderState = {
 	icon: string;
 	iconStateKey: string;
 	name: string;
+	feedbackKey?: string;
 	layoutApplied: boolean;
+};
+
+type ActionRenderState = {
+	image?: string;
+	title?: string;
+	triggerDescriptionKey?: string;
 };
 
 let globalStepSize = DEFAULT_STEP_SIZE;
@@ -35,6 +42,7 @@ streamDeck.settings.onDidReceiveGlobalSettings<MixerGlobalSettings>((ev) => {
 @action({ UUID: MIXER_SLOT_UUID })
 export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	private readonly dialRenderStateByContext = new Map<string, DialRenderState>();
+	private readonly actionRenderStateByContext = new Map<string, ActionRenderState>();
 
 	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<MixerSlotSettings>): Promise<void> {
 		await ensureGlobalSettingsLoaded();
@@ -83,6 +91,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 
 	public override onWillDisappear(ev: WillDisappearEvent<MixerSlotSettings>): void {
 		this.dialRenderStateByContext.delete(ev.action.id);
+		this.actionRenderStateByContext.delete(ev.action.id);
 		mixerRuntime.unregister(ev.action.id);
 	}
 
@@ -100,34 +109,48 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action));
 		if (!view.session) {
 			if (action.isDial()) {
-				this.dialRenderStateByContext.delete(action.id);
 				const blankDialAsset = renderTransparentAssetSvg(200, 100);
-				await action.setFeedbackLayout(DIAL_LAYOUT);
-				await action.setFeedback({
+				const blankIcon = renderDialIconSvg();
+				const feedback = {
 					background: blankDialAsset,
-					icon: renderDialIconSvg(),
+					icon: blankIcon,
 					level: { value: 0, bar_fill_c: "#00000000", bar_bg_c: "#00000000", bar_border_c: "#00000000", subtype: BarSubType.Groove },
 					name: "",
 					value: "",
+				};
+				const feedbackKey = JSON.stringify(feedback);
+				const renderState = this.dialRenderStateByContext.get(action.id);
+				if (!renderState?.layoutApplied) {
+					await action.setFeedbackLayout(DIAL_LAYOUT);
+				}
+				if (renderState?.feedbackKey !== feedbackKey) {
+					await action.setFeedback(feedback);
+				}
+				await this.setImageIfChanged(action, blankIcon);
+				this.dialRenderStateByContext.set(action.id, {
+					icon: blankIcon,
+					iconStateKey: "",
+					name: "",
+					feedbackKey,
+					layoutApplied: true,
 				});
-				await action.setImage(renderDialIconSvg());
 			} else {
-				await action.setImage(renderKeySvg());
+				await this.setImageIfChanged(action, renderKeySvg());
 			}
 
-			await action.setTitle("");
+			await this.setTitleIfChanged(action, "");
 			return;
 		}
 
 		if (action.isDial()) {
 			await this.renderDialSession(action, view.session);
 		} else {
-			await action.setImage(renderKeySvg(view.session));
+			await this.setImageIfChanged(action, renderKeySvg(view.session));
 		}
 
-		await action.setTitle("");
+		await this.setTitleIfChanged(action, "");
 		if (action.isDial()) {
-			await action.setTriggerDescription({
+			await this.setTriggerDescriptionIfChanged(action, {
 				rotate: "Adjust",
 				push: "Mute",
 			});
@@ -162,17 +185,61 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		let dialIcon = renderState?.icon;
 		if (renderState?.iconStateKey !== iconStateKey) {
 			dialIcon = renderDialIconSvg(session, session.muted);
-			await action.setImage(dialIcon);
+			await this.setImageIfChanged(action, dialIcon);
 			feedback.icon = dialIcon;
 		}
 
-		await action.setFeedback(feedback);
+		const feedbackKey = JSON.stringify(feedback);
+		if (renderState?.feedbackKey !== feedbackKey) {
+			await action.setFeedback(feedback);
+		}
 
 		this.dialRenderStateByContext.set(action.id, {
 			icon: dialIcon ?? renderDialIconSvg(session, session.muted),
 			iconStateKey,
 			name,
+			feedbackKey,
 			layoutApplied: true,
+		});
+	}
+
+	private async setImageIfChanged(action: MixerSlotActionInstance, image: string): Promise<void> {
+		const renderState = this.actionRenderStateByContext.get(action.id);
+		if (renderState?.image === image) {
+			return;
+		}
+
+		await action.setImage(image);
+		this.actionRenderStateByContext.set(action.id, {
+			...renderState,
+			image,
+		});
+	}
+
+	private async setTitleIfChanged(action: MixerSlotActionInstance, title: string): Promise<void> {
+		const renderState = this.actionRenderStateByContext.get(action.id);
+		if (renderState?.title === title) {
+			return;
+		}
+
+		await action.setTitle(title);
+		this.actionRenderStateByContext.set(action.id, {
+			...renderState,
+			title,
+		});
+	}
+
+	private async setTriggerDescriptionIfChanged(action: DialAction<MixerSlotSettings>, description: { rotate: string; push: string }): Promise<void> {
+		const triggerDescriptionKey = `${description.rotate}|${description.push}`;
+		const renderState = this.actionRenderStateByContext.get(action.id);
+		if (renderState?.triggerDescriptionKey === triggerDescriptionKey) {
+			return;
+		}
+
+		await action.setTriggerDescription(description);
+		this.actionRenderStateByContext.set(action.id, {
+			...renderState,
+			triggerDescriptionKey,
 		});
 	}
 }

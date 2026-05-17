@@ -1,5 +1,12 @@
 import type { KeyAction } from '@elgato/streamdeck';
 
+type PagerRenderState = {
+	image?: string;
+	title?: string;
+};
+
+const pagerRenderStateByContext = new Map<string, PagerRenderState>();
+
 function renderHiddenPagerKeySvg(): string {
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
@@ -25,6 +32,16 @@ export function renderPagerKeySvg(label: string, direction: 'left' | 'right', pa
 }
 
 export async function renderPagerAction(action: KeyAction<Record<string, never>>, label: string, direction: 'left' | 'right', page: number, totalPages: number, visible: boolean): Promise<void> {
-	await action.setImage(visible ? renderPagerKeySvg(label, direction, page, totalPages) : renderHiddenPagerKeySvg());
-	await action.setTitle('');
+	const image = visible ? renderPagerKeySvg(label, direction, page, totalPages) : renderHiddenPagerKeySvg();
+	const renderState = pagerRenderStateByContext.get(action.id);
+	if (renderState?.image !== image) {
+		await action.setImage(image);
+	}
+	if (renderState?.title !== '') {
+		await action.setTitle('');
+	}
+	pagerRenderStateByContext.set(action.id, {
+		image,
+		title: '',
+	});
 }
