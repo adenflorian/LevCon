@@ -24,6 +24,7 @@ export type MixerSlotSettings = Record<string, never>;
 export type MixerGlobalSettings = {
 	stepSize?: number;
 	priorityMatchers?: string[];
+	blacklistMatchers?: string[];
 };
 
 export type MixerViewModel = {

@@ -9,6 +9,8 @@ import type { MixerSession } from "../types/mixer";
 const INACTIVE_ICON_DELAY_MS = 5_000;
 const PEAK_ACTIVITY_THRESHOLD = 0.001;
 let sessionPriorityMatchers: string[] = [];
+const DEFAULT_BLACKLIST_MATCHERS = ["system sounds"];
+let sessionBlacklistMatchers: string[] = DEFAULT_BLACKLIST_MATCHERS;
 
 type HelperListResponse = {
 	endpoint: MixerSession;
@@ -63,6 +65,11 @@ export class AudioSessionProvider {
 		if (this.cachedSessions) {
 			this.cachedSessions = normalizeSessions(this.cachedSessions);
 		}
+	}
+
+	setBlacklistMatchers(matchers: string[] | undefined): void {
+		sessionBlacklistMatchers = normalizeBlacklistMatchers(matchers);
+		this.cachedSessions = undefined;
 	}
 
 	applyOptimisticVolumeChange(sessionId: string, delta: number): void {
@@ -323,7 +330,7 @@ export const audioSessionProvider = new AudioSessionProvider();
 
 function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
 	const pinnedOutput = sessions.find((session) => session.isOutputVolume);
-	const appSessions = sessions.filter((session) => !session.isOutputVolume);
+	const appSessions = sessions.filter((session) => !session.isOutputVolume && !isBlacklistedSession(session));
 	const groups = new Map<string, MixerSession[]>();
 
 	for (const session of appSessions) {
@@ -558,6 +565,34 @@ function normalizePriorityMatchers(matchers: string[] | undefined): string[] {
 	}
 
 	return [...new Set(matchers.map((matcher) => normalizeKey(matcher)).filter(Boolean))];
+}
+
+function normalizeBlacklistMatchers(matchers: string[] | undefined): string[] {
+	if (!matchers) {
+		return [...DEFAULT_BLACKLIST_MATCHERS];
+	}
+
+	return [...new Set(matchers.map((matcher) => normalizeKey(matcher)).filter(Boolean))];
+}
+
+function isBlacklistedSession(session: MixerSession): boolean {
+	if (sessionBlacklistMatchers.length === 0) {
+		return false;
+	}
+
+	const haystacks = [
+		session.displayName,
+		baseLabel(session),
+		session.shortDisplayName ?? "",
+		session.processName,
+		session.processCommandLine ?? "",
+	].map((value) => normalizeKey(value)).filter(Boolean);
+
+	if (isSystemSession(session)) {
+		haystacks.push("system sounds", "system");
+	}
+
+	return sessionBlacklistMatchers.some((matcher) => haystacks.some((value) => value.includes(matcher)));
 }
 
 function isAudiblyActive(session: MixerSession): boolean {

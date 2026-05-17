@@ -3,6 +3,11 @@
  */
 let websocket;
 /**
+ * @typedef {Window & typeof globalThis & {
+ *   connectElgatoStreamDeckSocket?: (inPort: any, inUUID: any, inRegisterEvent: any, inInfo: any, inActionInfo: string) => void;
+ * }} StreamDeckWindow
+ */
+/**
  * @type {any}
  */
 let propertyInspectorUuid;
@@ -13,15 +18,26 @@ let actionContext;
 let actionUuid;
 
 /**
- * @type {{ stepSizeNumber: HTMLInputElement; stepSizeRange: HTMLInputElement; priorityMatchers: HTMLTextAreaElement; }}
+ * @type {{ stepSizeNumber: HTMLInputElement; stepSizeRange: HTMLInputElement; priorityMatchers: HTMLTextAreaElement; blacklistMatchers: HTMLTextAreaElement; }}
  */
 const elements = {
-  stepSizeNumber: document.getElementById("stepSizeNumber"),
-  stepSizeRange: document.getElementById("stepSizeRange"),
-  priorityMatchers: document.getElementById("priorityMatchers"),
+  stepSizeNumber: /** @type {HTMLInputElement} */ (
+    document.getElementById("stepSizeNumber")
+  ),
+  stepSizeRange: /** @type {HTMLInputElement} */ (
+    document.getElementById("stepSizeRange")
+  ),
+  priorityMatchers: /** @type {HTMLTextAreaElement} */ (
+    document.getElementById("priorityMatchers")
+  ),
+  blacklistMatchers: /** @type {HTMLTextAreaElement} */ (
+    document.getElementById("blacklistMatchers")
+  ),
 };
 
-window.connectElgatoStreamDeckSocket = (
+const DEFAULT_BLACKLIST_MATCHERS = ["system sounds"];
+
+/** @type {StreamDeckWindow} */ (window).connectElgatoStreamDeckSocket = (
   /** @type {any} */ inPort,
   /** @type {any} */ inUUID,
   /** @type {any} */ inRegisterEvent,
@@ -64,21 +80,30 @@ bindMirroredInputs(
 elements.priorityMatchers.addEventListener("input", () => {
   persistGlobalSettings();
 });
+elements.blacklistMatchers.addEventListener("input", () => {
+  persistGlobalSettings();
+});
 
+/**
+ * @param {Record<string, never>} settings
+ */
 function applyActionSettings(settings) {}
 
 /**
- * @param {{ stepSize: any; priorityMatchers: any[]; }} settings
+ * @param {{ stepSize: any; priorityMatchers: any[]; blacklistMatchers: any[]; }} settings
  */
 function applyGlobalSettings(settings) {
   setMirroredValue(
     elements.stepSizeRange,
     elements.stepSizeNumber,
-    clampNumber(settings.stepSize, 1, 25, 5),
+    clampNumber(settings.stepSize, 1, 25, 2),
   );
   elements.priorityMatchers.value = Array.isArray(settings.priorityMatchers)
     ? settings.priorityMatchers.join("\n")
     : "";
+  elements.blacklistMatchers.value = Array.isArray(settings.blacklistMatchers)
+    ? settings.blacklistMatchers.join("\n")
+    : DEFAULT_BLACKLIST_MATCHERS.join("\n");
 }
 
 /**
@@ -129,8 +154,9 @@ function currentActionSettings() {
 
 function currentGlobalSettings() {
   return {
-    stepSize: clampNumber(elements.stepSizeNumber.value, 1, 25, 5),
+    stepSize: clampNumber(elements.stepSizeNumber.value, 1, 25, 2),
     priorityMatchers: parsePriorityMatchers(elements.priorityMatchers.value),
+    blacklistMatchers: parsePriorityMatchers(elements.blacklistMatchers.value),
   };
 }
 
@@ -165,7 +191,7 @@ function persistSettings() {
 }
 
 /**
- * @param {{ event: any; uuid?: any; context?: any; payload?: {  } | { stepSize: any; priorityMatchers: string[]; }; }} payload
+ * @param {{ event: any; uuid?: any; context?: any; payload?: {  } | { stepSize: any; priorityMatchers: string[]; blacklistMatchers: string[]; }; }} payload
  */
 function send(payload) {
   if (!websocket || websocket.readyState !== WebSocket.OPEN) {

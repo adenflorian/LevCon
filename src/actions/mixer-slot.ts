@@ -1,6 +1,7 @@
 import streamDeck, {
-	action, BarSubType, DialAction, DialRotateEvent, DidReceiveSettingsEvent, FeedbackPayload,
-	KeyAction, KeyDownEvent, SingletonAction, TouchTapEvent, WillAppearEvent, WillDisappearEvent
+	action, BarSubType, DialAction, DialDownEvent, DialRotateEvent, DidReceiveSettingsEvent,
+	FeedbackPayload, KeyAction, KeyDownEvent, SingletonAction, TouchTapEvent, WillAppearEvent,
+	WillDisappearEvent
 } from '@elgato/streamdeck';
 
 import { audioSessionProvider } from '../services/audio-session-provider';
@@ -28,6 +29,7 @@ let globalSettingsLoaded: Promise<void> | undefined;
 streamDeck.settings.onDidReceiveGlobalSettings<MixerGlobalSettings>((ev) => {
 	globalStepSize = clampStepSize(ev.settings.stepSize);
 	audioSessionProvider.setPriorityMatchers(ev.settings.priorityMatchers);
+	audioSessionProvider.setBlacklistMatchers(ev.settings.blacklistMatchers);
 });
 
 @action({ UUID: MIXER_SLOT_UUID })
@@ -49,6 +51,13 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		}
 
 		await this.renderDialSession(ev.action, session);
+	}
+
+	override async onDialDown(ev: DialDownEvent<MixerSlotSettings>): Promise<void> {
+		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action));
+		if (!changed) {
+			await ev.action.showAlert();
+		}
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<MixerSlotSettings>): Promise<void> {
@@ -410,6 +419,7 @@ async function ensureGlobalSettingsLoaded(): Promise<void> {
 			.then((settings) => {
 				globalStepSize = clampStepSize(settings.stepSize);
 				audioSessionProvider.setPriorityMatchers(settings.priorityMatchers);
+				audioSessionProvider.setBlacklistMatchers(settings.blacklistMatchers);
 			});
 	}
 
