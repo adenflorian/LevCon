@@ -1,7 +1,7 @@
 import type { MixerSession, MixerViewModel } from "../types/mixer";
 import { audioSessionProvider } from './audio-session-provider';
 
-const DEVICE_REFRESH_INTERVAL_MS = 1500;
+const DEVICE_REFRESH_INTERVAL_MS = 500;
 const VOLUME_FLUSH_DELAY_MS = 40;
 
 type SlotRegistration = {
