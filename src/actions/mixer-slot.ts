@@ -1,8 +1,7 @@
 import streamDeck, {
     action, BarSubType, DialAction, DialRotateEvent, DidReceiveSettingsEvent, FeedbackPayload,
     KeyAction, KeyDownEvent, PropertyInspectorDidAppearEvent, SendToPluginEvent, SingletonAction,
-    TouchTapEvent,
-    WillAppearEvent, WillDisappearEvent
+    TouchTapEvent, WillAppearEvent, WillDisappearEvent
 } from '@elgato/streamdeck';
 
 import { audioSessionProvider } from '../services/audio-session-provider';
@@ -27,6 +26,7 @@ let globalSettingsLoaded: Promise<void> | undefined;
 
 streamDeck.settings.onDidReceiveGlobalSettings<MixerGlobalSettings>((ev) => {
 	globalStepSize = clampStepSize(ev.settings.stepSize);
+	audioSessionProvider.setPriorityMatchers(ev.settings.priorityMatchers);
 });
 
 @action({ UUID: MIXER_SLOT_UUID })
@@ -453,6 +453,7 @@ async function ensureGlobalSettingsLoaded(): Promise<void> {
 		globalSettingsLoaded = streamDeck.settings.getGlobalSettings<MixerGlobalSettings>()
 			.then((settings) => {
 				globalStepSize = clampStepSize(settings.stepSize);
+				audioSessionProvider.setPriorityMatchers(settings.priorityMatchers);
 			});
 	}
 

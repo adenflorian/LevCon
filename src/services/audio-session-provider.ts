@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { MixerSession, SessionVisibility } from "../types/mixer";
 
 const INACTIVE_ICON_DELAY_MS = 5_000;
+let sessionPriorityMatchers: string[] = [];
 
 type HelperListResponse = {
 	endpoint: MixerSession;
@@ -55,6 +56,14 @@ export class AudioSessionProvider {
 		}
 
 		return this.refreshSessions(visibility);
+	}
+
+	setPriorityMatchers(matchers: string[] | undefined): void {
+		sessionPriorityMatchers = normalizePriorityMatchers(matchers);
+
+		for (const [visibility, sessions] of this.cachedSessionsByVisibility.entries()) {
+			this.cachedSessionsByVisibility.set(visibility, normalizeSessions(sessions));
+		}
 	}
 
 	applyOptimisticVolumeChange(sessionId: string, delta: number): void {
@@ -349,7 +358,7 @@ function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
 			displayName: label,
 			shortDisplayName: compactLabel(baseLabel(session), suffix),
 		};
-	});
+	}).sort(compareSessions);
 
 	if (!pinnedOutput) {
 		return normalizedApps;
@@ -389,4 +398,90 @@ function duplicateSuffix(session: MixerSession, group: MixerSession[]): string {
 
 function normalizeKey(value: string): string {
 	return value.trim().toLowerCase();
+}
+
+function compareSessions(left: MixerSession, right: MixerSession): number {
+	const systemRank = compareBooleanRank(isSystemSession(left), isSystemSession(right));
+	if (systemRank !== 0) {
+		return systemRank;
+	}
+
+	const priorityComparison = comparePriorityRank(left, right);
+	if (priorityComparison !== 0) {
+		return priorityComparison;
+	}
+
+	const activeRank = compareBooleanRank(left.active, right.active);
+	if (activeRank !== 0) {
+		return activeRank;
+	}
+
+	const labelRank = baseLabel(left).localeCompare(baseLabel(right), undefined, { sensitivity: "base" });
+	if (labelRank !== 0) {
+		return labelRank;
+	}
+
+	const processRank = left.processName.localeCompare(right.processName, undefined, { sensitivity: "base" });
+	if (processRank !== 0) {
+		return processRank;
+	}
+
+	const pidRank = (left.processId ?? Number.MAX_SAFE_INTEGER) - (right.processId ?? Number.MAX_SAFE_INTEGER);
+	if (pidRank !== 0) {
+		return pidRank;
+	}
+
+	return left.id.localeCompare(right.id, undefined, { sensitivity: "base" });
+}
+
+function compareBooleanRank(left: boolean, right: boolean): number {
+	if (left === right) {
+		return 0;
+	}
+
+	return left ? -1 : 1;
+}
+
+function comparePriorityRank(left: MixerSession, right: MixerSession): number {
+	const leftRank = priorityRank(left);
+	const rightRank = priorityRank(right);
+
+	if (leftRank === rightRank) {
+		return 0;
+	}
+
+	return leftRank - rightRank;
+}
+
+function priorityRank(session: MixerSession): number {
+	const haystacks = [session.displayName, baseLabel(session), session.processName]
+		.map((value) => normalizeKey(value))
+		.filter(Boolean);
+
+	for (let index = 0; index < sessionPriorityMatchers.length; index += 1) {
+		const matcher = sessionPriorityMatchers[index];
+		if (haystacks.some((value) => value.includes(matcher))) {
+			return index;
+		}
+	}
+
+	return Number.MAX_SAFE_INTEGER;
+}
+
+function isSystemSession(session: MixerSession): boolean {
+	if (session.isSystemSoundsSession) {
+		return true;
+	}
+
+	const normalizedDisplayName = normalizeKey(session.displayName);
+	const normalizedShortName = normalizeKey(session.shortDisplayName ?? "");
+	return normalizedDisplayName === "system sounds" || normalizedShortName === "system";
+}
+
+function normalizePriorityMatchers(matchers: string[] | undefined): string[] {
+	if (!matchers) {
+		return [];
+	}
+
+	return [...new Set(matchers.map((matcher) => normalizeKey(matcher)).filter(Boolean))];
 }

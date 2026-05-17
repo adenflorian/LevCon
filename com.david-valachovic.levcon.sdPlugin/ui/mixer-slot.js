@@ -13,6 +13,7 @@ const elements = {
   slotIndexRange: document.getElementById("slotIndexRange"),
   stepSizeNumber: document.getElementById("stepSizeNumber"),
   stepSizeRange: document.getElementById("stepSizeRange"),
+  priorityMatchers: document.getElementById("priorityMatchers"),
 };
 
 window.connectElgatoStreamDeckSocket = (
@@ -68,6 +69,10 @@ bindMirroredInputs(
   persistGlobalSettings,
 );
 elements.showApps.addEventListener("change", persistSettings);
+elements.priorityMatchers.addEventListener("input", () => {
+  persistGlobalSettings();
+  requestPreview();
+});
 elements.refreshPreview.addEventListener("click", () => requestPreview());
 
 function applyActionSettings(settings) {
@@ -85,6 +90,9 @@ function applyGlobalSettings(settings) {
     elements.stepSizeNumber,
     clampNumber(settings.stepSize, 1, 25, 5),
   );
+  elements.priorityMatchers.value = Array.isArray(settings.priorityMatchers)
+    ? settings.priorityMatchers.join("\n")
+    : "";
 }
 
 function bindMirroredInputs(rangeInput, numberInput, min, max, onChange) {
@@ -126,7 +134,15 @@ function currentActionSettings() {
 function currentGlobalSettings() {
   return {
     stepSize: clampNumber(elements.stepSizeNumber.value, 1, 25, 5),
+    priorityMatchers: parsePriorityMatchers(elements.priorityMatchers.value),
   };
+}
+
+function parsePriorityMatchers(value) {
+  return `${value}`
+    .split(/\r?\n/u)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 function handlePluginMessage(payload) {

@@ -27,6 +27,7 @@ export type MixerSlotSettings = {
 
 export type MixerGlobalSettings = {
 	stepSize?: number;
+	priorityMatchers?: string[];
 };
 
 export type MixerInspectorRequest = {

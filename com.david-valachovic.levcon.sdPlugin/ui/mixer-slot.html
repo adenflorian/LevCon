@@ -36,6 +36,7 @@
         }
 
         input[type="number"],
+        textarea,
         select {
             width: 100%;
             padding: 8px 10px;
@@ -45,6 +46,11 @@
             color: #eef3f7;
             box-sizing: border-box;
         }
+
+        textarea {
+			min-height: 92px;
+			resize: vertical;
+		}
 
         input[type="range"] {
             width: 100%;
@@ -162,6 +168,11 @@
                 <input id="stepSizeRange" type="range" min="1" max="25" step="1" value="5" />
                 <input id="stepSizeNumber" type="number" min="1" max="25" step="1" value="5" />
             </div>
+        </label>
+
+        <label>
+            <span>Priority List</span>
+            <textarea id="priorityMatchers" rows="5" placeholder="discord&#10;chrome&#10;spotify"></textarea>
         </label>
 
         <button id="refreshPreview" type="button">Refresh Preview</button>
