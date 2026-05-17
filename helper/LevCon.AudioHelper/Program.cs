@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NAudio.CoreAudioApi;
@@ -70,6 +73,33 @@ static string BuildDisplayName(AudioSessionControl session)
   return session.IsSystemSoundsSession ? "System Sounds" : $"PID {session.GetProcessID}";
 }
 
+static string? BuildIconDataUri(AudioSessionControl session)
+{
+  var processPath = TryGetProcessPath(session.GetProcessID);
+  if (string.IsNullOrWhiteSpace(processPath) || !File.Exists(processPath))
+  {
+    return null;
+  }
+
+  try
+  {
+    using Icon? icon = Icon.ExtractAssociatedIcon(processPath);
+    if (icon is null)
+    {
+      return null;
+    }
+
+    using var bitmap = icon.ToBitmap();
+    using var stream = new MemoryStream();
+    bitmap.Save(stream, ImageFormat.Png);
+    return $"data:image/png;base64,{Convert.ToBase64String(stream.ToArray())}";
+  }
+  catch
+  {
+    return null;
+  }
+}
+
 static string BuildProcessName(AudioSessionControl session)
 {
   return TryGetProcessName(session.GetProcessID) ?? string.Empty;
@@ -136,6 +166,7 @@ static object ListSessions(string visibility)
     visibleSessions.Add(new SessionDto(
         GetSessionId(session),
         BuildDisplayName(session),
+      BuildIconDataUri(session),
         BuildProcessName(session),
         (int)Math.Round(session.SimpleAudioVolume.Volume * 100f),
         session.SimpleAudioVolume.Mute,
@@ -181,6 +212,17 @@ static object ToggleMute(string sessionId)
 
 static string? TryGetProcessName(uint processId)
 {
+	var processPath = TryGetProcessPath(processId);
+	if (!string.IsNullOrWhiteSpace(processPath))
+	{
+		return Path.GetFileName(processPath);
+	}
+
+	return null;
+}
+
+static string? TryGetProcessPath(uint processId)
+{
   if (processId == 0)
   {
     return null;
@@ -189,9 +231,7 @@ static string? TryGetProcessName(uint processId)
   try
   {
     using var process = Process.GetProcessById((int)processId);
-    return string.IsNullOrWhiteSpace(process.ProcessName)
-        ? null
-        : $"{process.ProcessName}.exe";
+    return process.MainModule?.FileName;
   }
   catch
   {
@@ -201,6 +241,6 @@ static string? TryGetProcessName(uint processId)
 
 record MutationResult(bool Ok);
 
-record SessionDto(string Id, string DisplayName, string ProcessName, int Volume, bool Muted, bool Active);
+record SessionDto(string Id, string DisplayName, string? IconDataUri, string ProcessName, int Volume, bool Muted, bool Active);
 
 record SessionListResult(IReadOnlyList<SessionDto> Sessions);

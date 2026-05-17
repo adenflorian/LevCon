@@ -1,9 +1,8 @@
-import {
-  action, DialAction, DialRotateEvent, DidReceiveSettingsEvent, KeyAction, KeyDownEvent,
-	PropertyInspectorDidAppearEvent, SendToPluginEvent, SingletonAction, TouchTapEvent, WillAppearEvent, WillDisappearEvent
+import streamDeck, {
+    action, DialAction, DialRotateEvent, DidReceiveSettingsEvent, KeyAction, KeyDownEvent,
+    PropertyInspectorDidAppearEvent, SendToPluginEvent, SingletonAction, TouchTapEvent,
+    WillAppearEvent, WillDisappearEvent
 } from '@elgato/streamdeck';
-
-import streamDeck from '@elgato/streamdeck';
 
 import { audioSessionProvider } from '../services/audio-session-provider';
 import { mixerRuntime } from '../services/mixer-runtime';
@@ -89,11 +88,13 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	private async render(action: MixerSlotActionInstance, settings: MixerSlotSettings): Promise<void> {
 		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action, settings), settings.showApps ?? "all");
 		if (!view.session) {
+			await action.setImage();
 			await action.setTitle(`Empty\n${view.page + 1}/${view.totalPages}`);
 			return;
 		}
 
 		const muteLabel = view.session.muted ? "M" : `${view.session.volume}%`;
+		await action.setImage(view.session.iconDataUri);
 		await action.setTitle(`${labelForSession(view.session.displayName)}\n${muteLabel}`);
 		if (action.isDial()) {
 			await action.setTriggerDescription({

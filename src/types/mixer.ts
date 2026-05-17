@@ -3,6 +3,7 @@ export type SessionVisibility = "all" | "active";
 export type MixerSession = {
 	id: string;
 	displayName: string;
+	iconDataUri?: string;
 	processName: string;
 	volume: number;
 	muted: boolean;
