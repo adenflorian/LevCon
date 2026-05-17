@@ -1,5 +1,5 @@
 import streamDeck, {
-	action, BarSubType, DialAction, DialRotateEvent, DidReceiveSettingsEvent, KeyAction,
+	action, BarSubType, DialAction, DialRotateEvent, DidReceiveSettingsEvent, type FeedbackPayload, KeyAction,
 	KeyDownEvent, PropertyInspectorDidAppearEvent, SendToPluginEvent, SingletonAction,
 	TouchTapEvent, WillAppearEvent, WillDisappearEvent
 } from '@elgato/streamdeck';
@@ -14,6 +14,12 @@ const DIAL_LAYOUT = "layouts/mixer-slot.json";
 const DEFAULT_STEP_SIZE = 5;
 
 type MixerSlotActionInstance = DialAction<MixerSlotSettings> | KeyAction<MixerSlotSettings>;
+type DialRenderState = {
+	icon: string;
+	iconStateKey: string;
+	name: string;
+	layoutApplied: boolean;
+};
 
 let globalStepSize = DEFAULT_STEP_SIZE;
 let globalSettingsLoaded: Promise<void> | undefined;
@@ -24,6 +30,8 @@ streamDeck.settings.onDidReceiveGlobalSettings<MixerGlobalSettings>((ev) => {
 
 @action({ UUID: MIXER_SLOT_UUID })
 export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
+	private readonly dialRenderStateByContext = new Map<string, DialRenderState>();
+
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<MixerSlotSettings>): Promise<void> {
 		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
 		this.registerAction(ev.action, settings);
@@ -35,10 +43,13 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
 		await ensureGlobalSettingsLoaded();
 		const stepSize = globalStepSize;
-		const changed = await mixerRuntime.adjustSlot(ev.action.device.id, resolveSlotIndex(ev.action, settings), settings.showApps ?? "all", stepSize * ev.payload.ticks);
-		if (!changed) {
+		const session = await mixerRuntime.adjustSlot(ev.action.device.id, resolveSlotIndex(ev.action, settings), settings.showApps ?? "all", stepSize * ev.payload.ticks);
+		if (!session) {
 			await ev.action.showAlert();
+			return;
 		}
+
+		await this.renderDialSession(ev.action, session);
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<MixerSlotSettings>): Promise<void> {
@@ -83,6 +94,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	}
 
 	override onWillDisappear(ev: WillDisappearEvent<MixerSlotSettings>): void {
+		this.dialRenderStateByContext.delete(ev.action.id);
 		mixerRuntime.unregister(ev.action.id);
 	}
 
@@ -100,6 +112,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action, settings), settings.showApps ?? "all");
 		if (!view.session) {
 			if (action.isDial()) {
+				this.dialRenderStateByContext.delete(action.id);
 				const blankDialAsset = renderTransparentAssetSvg(200, 100);
 				await action.setFeedbackLayout(DIAL_LAYOUT);
 				await action.setFeedback({
@@ -120,22 +133,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 
 		const muteLabel = view.session.muted ? "M" : `${view.session.volume}%`;
 		if (action.isDial()) {
-			const dialIcon = renderDialIconSvg(view.session, view.session.muted);
-			await action.setImage(dialIcon);
-			await action.setFeedbackLayout(DIAL_LAYOUT);
-			await action.setFeedback({
-				background: renderDialBackgroundSvg(),
-				icon: dialIcon,
-				level: {
-					value: view.session.volume,
-					bar_fill_c: view.session.muted ? "#6d7783" : "#f6f8fb",
-					bar_bg_c: "#242d36",
-					bar_border_c: "#242d36",
-					subtype: BarSubType.Groove,
-				},
-				name: dialLabel(view.session),
-				value: muteLabel,
-			});
+			await this.renderDialSession(action, view.session);
 		} else {
 			await action.setImage(renderKeySvg(view.session, muteLabel));
 		}
@@ -147,6 +145,48 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 				push: "Mute",
 			});
 		}
+	}
+
+	private async renderDialSession(action: DialAction<MixerSlotSettings>, session: MixerInspectorPreview["sessions"][number]): Promise<void> {
+		const muteLabel = session.muted ? "M" : `${session.volume}%`;
+		const iconStateKey = dialIconStateKey(session, session.muted);
+		const name = dialLabel(session);
+		const renderState = this.dialRenderStateByContext.get(action.id);
+		const feedback: FeedbackPayload = {
+			level: {
+				value: session.volume,
+				bar_fill_c: session.muted ? "#6d7783" : "#f6f8fb",
+				bar_bg_c: "#242d36",
+				bar_border_c: "#242d36",
+				subtype: BarSubType.Groove,
+			},
+			value: muteLabel,
+		};
+
+		if (!renderState?.layoutApplied) {
+			await action.setFeedbackLayout(DIAL_LAYOUT);
+			feedback.background = renderDialBackgroundSvg();
+		}
+
+		if (renderState?.name !== name) {
+			feedback.name = name;
+		}
+
+		let dialIcon = renderState?.icon;
+		if (renderState?.iconStateKey !== iconStateKey) {
+			dialIcon = renderDialIconSvg(session, session.muted);
+			await action.setImage(dialIcon);
+			feedback.icon = dialIcon;
+		}
+
+		await action.setFeedback(feedback);
+
+		this.dialRenderStateByContext.set(action.id, {
+			icon: dialIcon ?? renderDialIconSvg(session, session.muted),
+			iconStateKey,
+			name,
+			layoutApplied: true,
+		});
 	}
 
 	private async ensureSettings(action: MixerSlotActionInstance, settings: MixerSlotSettings): Promise<MixerSlotSettings> {
@@ -294,6 +334,22 @@ function renderDialBackgroundSvg(): string {
 			<rect x="0.5" y="0.5" width="199" height="99" rx="12" fill="#171d24" stroke="#242b33" />
 		</svg>
 	`)}`;
+}
+
+function dialIconStateKey(
+	session: { id?: string; iconDataUri?: string; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean; recentlyActive?: boolean },
+	muted: boolean,
+): string {
+	return [
+		session.id ?? "",
+		session.iconDataUri ?? "",
+		session.shortDisplayName ?? "",
+		session.displayName ?? "",
+		session.isSystemSoundsSession ? "1" : "0",
+		session.isOutputVolume ? "1" : "0",
+		session.recentlyActive === false ? "0" : "1",
+		muted ? "1" : "0",
+	].join("|");
 }
 
 function renderDialIconSvg(

@@ -1,4 +1,4 @@
-import type { MixerViewModel, SessionVisibility } from "../types/mixer";
+import type { MixerSession, MixerViewModel, SessionVisibility } from "../types/mixer";
 import { audioSessionProvider } from './audio-session-provider';
 
 const DEVICE_REFRESH_INTERVAL_MS = 1500;
@@ -50,17 +50,20 @@ class MixerRuntime {
 		this.stopRefreshLoopIfIdle();
 	}
 
-	async adjustSlot(deviceId: string, slotIndex: number, filter: SessionVisibility, delta: number): Promise<boolean> {
+	async adjustSlot(deviceId: string, slotIndex: number, filter: SessionVisibility, delta: number): Promise<MixerSession | undefined> {
 		const view = await this.getView(deviceId, slotIndex, filter);
 		if (!view.session) {
-			return false;
+			return undefined;
 		}
 
 		audioSessionProvider.setOptimisticSessionState(view.session);
 		audioSessionProvider.applyOptimisticVolumeChange(view.session.id, delta);
-		void this.refreshDevice(deviceId);
 		this.queueVolumeAdjustment(deviceId, view.session.id, delta);
-		return true;
+		return {
+			...view.session,
+			volume: Math.max(0, Math.min(100, view.session.volume + delta)),
+			muted: view.session.volume + delta > 0 ? false : view.session.muted,
+		};
 	}
 
 	async getPageSummary(deviceId: string): Promise<{ page: number; totalPages: number; hasPrevious: boolean; hasNext: boolean }> {

@@ -1,12 +1,11 @@
-import { execFile } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
+import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 
 import type { MixerSession, SessionVisibility } from "../types/mixer";
 
-const execFileAsync = promisify(execFile);
 const INACTIVE_ICON_DELAY_MS = 5_000;
 
 type HelperListResponse = {
@@ -18,6 +17,22 @@ type HelperMutationResponse = {
 	ok: boolean;
 };
 
+type HelperRequest = {
+	command: "list" | "adjust-volume" | "toggle-mute";
+	visibility?: SessionVisibility;
+	id?: string;
+	delta?: number;
+};
+
+type HelperErrorResponse = {
+	error: string;
+};
+
+type PendingHelperResponse = {
+	resolve: (value: any) => void;
+	reject: (reason?: unknown) => void;
+};
+
 export class AudioSessionProvider {
 	readonly mode = "helper";
 
@@ -26,6 +41,11 @@ export class AudioSessionProvider {
 	private readonly optimisticStateBySessionId = new Map<string, { volume?: number; muted?: boolean }>();
 	private readonly cachedSessionsByVisibility = new Map<SessionVisibility, MixerSession[]>();
 	private readonly inFlightSessionsByVisibility = new Map<SessionVisibility, Promise<MixerSession[]>>();
+	private helperProcess?: ChildProcessWithoutNullStreams;
+	private helperStdout?: readline.Interface;
+	private helperStderr = "";
+	private helperRequestChain = Promise.resolve();
+	private pendingHelperResponses: PendingHelperResponse[] = [];
 
 	async listSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
 		const cachedSessions = this.cachedSessionsByVisibility.get(visibility);
@@ -63,13 +83,11 @@ export class AudioSessionProvider {
 	}
 
 	async adjustVolume(sessionId: string, delta: number): Promise<boolean> {
-		const response = await this.runHelper<HelperMutationResponse>([
-			"adjust-volume",
-			"--id",
-			sessionId,
-			"--delta",
-			String(delta),
-		]);
+		const response = await this.runHelper<HelperMutationResponse>({
+			command: "adjust-volume",
+			id: sessionId,
+			delta,
+		});
 
 		if (!response.ok) {
 			this.optimisticStateBySessionId.delete(sessionId);
@@ -81,11 +99,10 @@ export class AudioSessionProvider {
 	}
 
 	async toggleMute(sessionId: string): Promise<boolean> {
-		const response = await this.runHelper<HelperMutationResponse>([
-			"toggle-mute",
-			"--id",
-			sessionId,
-		]);
+		const response = await this.runHelper<HelperMutationResponse>({
+			command: "toggle-mute",
+			id: sessionId,
+		});
 
 		if (!response.ok) {
 			this.optimisticStateBySessionId.delete(sessionId);
@@ -112,7 +129,10 @@ export class AudioSessionProvider {
 	}
 
 	private async fetchSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
-		const response = await this.runHelper<HelperListResponse>(["list", "--visibility", visibility]);
+		const response = await this.runHelper<HelperListResponse>({
+			command: "list",
+			visibility,
+		});
 		const sessions = normalizeSessions(this.decorateRecentActivity(this.applyOptimisticState([response.endpoint, ...response.sessions])));
 		this.cachedSessionsByVisibility.set(visibility, sessions);
 		return sessions;
@@ -149,17 +169,82 @@ export class AudioSessionProvider {
 		throw new Error(`LevCon audio helper executable not found. Expected one of: ${candidates.join(", ")}`);
 	}
 
-	private async runHelper<T>(arguments_: string[]): Promise<T> {
-		const helperPath = await this.resolveHelperPath();
-		const { stdout, stderr } = await execFileAsync(helperPath, arguments_, {
-			windowsHide: true,
-		});
+	private async runHelper<T>(request: HelperRequest): Promise<T> {
+		const runRequest = async (): Promise<T> => {
+			const child = await this.ensureHelperProcess();
 
-		if (stderr.trim().length > 0) {
-			throw new Error(stderr.trim());
+			return new Promise<T>((resolve, reject) => {
+				const pendingResponse: PendingHelperResponse = { resolve, reject };
+				this.pendingHelperResponses.push(pendingResponse);
+				child.stdin.write(`${JSON.stringify(request)}\n`, (error) => {
+					if (!error) {
+						return;
+					}
+
+					const index = this.pendingHelperResponses.indexOf(pendingResponse);
+					if (index >= 0) {
+						this.pendingHelperResponses.splice(index, 1);
+					}
+					reject(error);
+				});
+			});
+		};
+
+		const nextRequest = this.helperRequestChain.then(runRequest, runRequest);
+		this.helperRequestChain = nextRequest.then(() => undefined, () => undefined);
+		return nextRequest;
+	}
+
+	private async ensureHelperProcess(): Promise<ChildProcessWithoutNullStreams> {
+		if (this.helperProcess && !this.helperProcess.killed && this.helperProcess.exitCode === null) {
+			return this.helperProcess;
 		}
 
-		return JSON.parse(stdout) as T;
+		const helperPath = await this.resolveHelperPath();
+		const child = spawn(helperPath, ["serve"], {
+			windowsHide: true,
+			stdio: ["pipe", "pipe", "pipe"],
+		});
+
+		this.helperProcess = child;
+		this.helperStderr = "";
+		this.helperStdout?.close();
+		this.helperStdout = readline.createInterface({ input: child.stdout });
+		this.helperStdout.on("line", (line) => {
+			const pendingResponse = this.pendingHelperResponses.shift();
+			if (!pendingResponse) {
+				return;
+			}
+
+			try {
+				const message = JSON.parse(line) as unknown;
+				if (typeof message === "object" && message && "error" in message) {
+					pendingResponse.reject(new Error((message as HelperErrorResponse).error));
+					return;
+				}
+
+				pendingResponse.resolve(message);
+			} catch (error) {
+				pendingResponse.reject(error);
+			}
+		});
+
+		child.stderr.on("data", (chunk) => {
+			this.helperStderr += chunk.toString();
+		});
+
+		child.on("exit", (code, signal) => {
+			const reason = this.helperStderr.trim() || `Helper exited unexpectedly (code=${code ?? "null"}, signal=${signal ?? "null"}).`;
+			this.helperProcess = undefined;
+			this.helperStdout?.close();
+			this.helperStdout = undefined;
+
+			while (this.pendingHelperResponses.length > 0) {
+				this.pendingHelperResponses.shift()?.reject(new Error(reason));
+			}
+		});
+
+		return child;
 	}
 
 	private decorateRecentActivity(sessions: MixerSession[]): MixerSession[] {

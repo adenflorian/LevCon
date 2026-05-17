@@ -24,13 +24,14 @@ try
 
   var command = args[0];
   var commandArgs = args.Skip(1).ToArray();
-  var result = command switch
+
+  if (command == "serve")
   {
-    "list" => ListSessions(GetOption(commandArgs, "--visibility") ?? "all"),
-    "adjust-volume" => AdjustVolume(GetRequiredOption(commandArgs, "--id"), ParseInt(GetRequiredOption(commandArgs, "--delta"))),
-    "toggle-mute" => ToggleMute(GetRequiredOption(commandArgs, "--id")),
-    _ => throw new InvalidOperationException($"Unknown command '{command}'."),
-  };
+    await RunServerAsync(options);
+    return 0;
+  }
+
+  var result = ExecuteCommand(command, commandArgs);
 
   Console.Out.Write(JsonSerializer.Serialize(result, options));
   return 0;
@@ -39,6 +40,60 @@ catch (Exception exception)
 {
   Console.Error.Write(exception.Message);
   return 1;
+}
+
+static object ExecuteCommand(string command, string[] commandArgs)
+{
+  return command switch
+  {
+    "list" => ListSessions(GetOption(commandArgs, "--visibility") ?? "all"),
+    "adjust-volume" => AdjustVolume(GetRequiredOption(commandArgs, "--id"), ParseInt(GetRequiredOption(commandArgs, "--delta"))),
+    "toggle-mute" => ToggleMute(GetRequiredOption(commandArgs, "--id")),
+    _ => throw new InvalidOperationException($"Unknown command '{command}'."),
+  };
+}
+
+static async Task RunServerAsync(JsonSerializerOptions options)
+{
+  while (true)
+  {
+    var line = await Console.In.ReadLineAsync();
+    if (line is null)
+    {
+      return;
+    }
+
+    if (string.IsNullOrWhiteSpace(line))
+    {
+      continue;
+    }
+
+    try
+    {
+      var request = JsonSerializer.Deserialize<HelperRequest>(line, options)
+        ?? throw new InvalidOperationException("Invalid helper request.");
+
+      var result = ExecuteCommand(request.Command, BuildCommandArgs(request));
+      await Console.Out.WriteLineAsync(JsonSerializer.Serialize(result, options));
+      await Console.Out.FlushAsync();
+    }
+    catch (Exception exception)
+    {
+      await Console.Out.WriteLineAsync(JsonSerializer.Serialize(new ErrorResult(exception.Message), options));
+      await Console.Out.FlushAsync();
+    }
+  }
+}
+
+static string[] BuildCommandArgs(HelperRequest request)
+{
+  return request.Command switch
+  {
+    "list" => ["--visibility", request.Visibility ?? "all"],
+    "adjust-volume" => ["--id", request.Id ?? throw new InvalidOperationException("Missing id."), "--delta", (request.Delta ?? throw new InvalidOperationException("Missing delta.")).ToString()],
+    "toggle-mute" => ["--id", request.Id ?? throw new InvalidOperationException("Missing id.")],
+    _ => [],
+  };
 }
 
 static object AdjustVolume(string sessionId, int delta)
@@ -295,6 +350,15 @@ static string? TryGetProcessPath(uint processId)
 }
 
 record MutationResult(bool Ok);
+
+record ErrorResult(string Error);
+
+record HelperRequest(
+  string Command,
+  string? Visibility,
+  string? Id,
+  int? Delta
+);
 
 record SessionDto(
   string Id,
