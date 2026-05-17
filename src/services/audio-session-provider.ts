@@ -371,7 +371,7 @@ function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
 		};
 	}).sort(compareSessions);
 
-	if (!pinnedOutput) {
+	if (!pinnedOutput || isBlacklistedSession(pinnedOutput)) {
 		return normalizedApps;
 	}
 
@@ -587,8 +587,11 @@ function isBlacklistedSession(session: MixerSession): boolean {
 		baseLabel(session),
 		session.shortDisplayName ?? "",
 		session.processName,
-		session.processCommandLine ?? "",
 	].map((value) => normalizeKey(value)).filter(Boolean);
+
+	if (session.isOutputVolume) {
+		haystacks.push("output", "output volume");
+	}
 
 	if (isSystemSession(session)) {
 		haystacks.push("system sounds", "system");
