@@ -2,7 +2,6 @@ import type { MixerSession, MixerViewModel } from "../types/mixer";
 import { audioSessionProvider } from './audio-session-provider';
 
 const DEVICE_REFRESH_INTERVAL_MS = 500;
-const VOLUME_FLUSH_DELAY_MS = 40;
 
 type SlotRegistration = {
 	contextId: string;
@@ -17,19 +16,10 @@ type PagerRegistration = {
 	refresh: () => Promise<void>;
 };
 
-type PendingVolumeAdjustment = {
-	deviceId: string;
-	sessionId: string;
-	delta: number;
-	flushing: boolean;
-	timer?: ReturnType<typeof setTimeout>;
-};
-
 class MixerRuntime {
 	private readonly pageByDevice = new Map<string, number>();
 	private readonly pagers = new Map<string, PagerRegistration>();
 	private readonly slots = new Map<string, SlotRegistration>();
-	private readonly pendingVolumeAdjustments = new Map<string, PendingVolumeAdjustment>();
 	private refreshTimer?: ReturnType<typeof setInterval>;
 	private refreshLoopActive = false;
 
@@ -57,7 +47,7 @@ class MixerRuntime {
 
 		audioSessionProvider.setOptimisticSessionState(view.session);
 		audioSessionProvider.applyOptimisticVolumeChange(view.session.id, delta);
-		this.queueVolumeAdjustment(deviceId, view.session.id, delta);
+		void this.adjustVolumeImmediately(deviceId, view.session.id, delta);
 		return {
 			...view.session,
 			volume: Math.max(0, Math.min(100, view.session.volume + delta)),
@@ -191,61 +181,9 @@ class MixerRuntime {
 		await Promise.all(refreshables.map(async (refreshable) => refreshable.refresh()));
 	}
 
-	private queueVolumeAdjustment(deviceId: string, sessionId: string, delta: number): void {
-		const key = `${deviceId}:${sessionId}`;
-		const pending = this.pendingVolumeAdjustments.get(key) ?? {
-			deviceId,
-			sessionId,
-			delta: 0,
-			flushing: false,
-		};
-
-		pending.delta += delta;
-		if (pending.timer) {
-			clearTimeout(pending.timer);
-		}
-
-		pending.timer = setTimeout(() => {
-			void this.flushVolumeAdjustment(key);
-		}, VOLUME_FLUSH_DELAY_MS);
-
-		this.pendingVolumeAdjustments.set(key, pending);
-	}
-
-	private async flushVolumeAdjustment(key: string): Promise<void> {
-		const pending = this.pendingVolumeAdjustments.get(key);
-		if (!pending || pending.flushing) {
-			return;
-		}
-
-		if (pending.timer) {
-			clearTimeout(pending.timer);
-			pending.timer = undefined;
-		}
-
-		if (pending.delta === 0) {
-			this.pendingVolumeAdjustments.delete(key);
-			return;
-		}
-
-		const delta = pending.delta;
-		pending.delta = 0;
-		pending.flushing = true;
-
-		try {
-			await audioSessionProvider.adjustVolume(pending.sessionId, delta);
-			await this.refreshDevice(pending.deviceId);
-		} finally {
-			pending.flushing = false;
-			if (pending.delta !== 0) {
-				pending.timer = setTimeout(() => {
-					void this.flushVolumeAdjustment(key);
-				}, VOLUME_FLUSH_DELAY_MS);
-				return;
-			}
-
-			this.pendingVolumeAdjustments.delete(key);
-		}
+	private async adjustVolumeImmediately(deviceId: string, sessionId: string, delta: number): Promise<void> {
+		await audioSessionProvider.adjustVolume(sessionId, delta);
+		await this.refreshDevice(deviceId);
 	}
 }
 
