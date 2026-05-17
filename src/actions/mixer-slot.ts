@@ -439,6 +439,12 @@ function renderKeySvg(
 	const mutedOverlay = muted ? renderMutedOverlaySvg(112, 16, 16) : '';
 	const label = labelLines.length > 1
 		? `
+				<text x="74" y="100" text-anchor="middle" fill="#000000d9" font-family="Segoe UI, sans-serif" font-size="26" font-weight="800">
+					${labelLines[0]}
+				</text>
+				<text x="74" y="122" text-anchor="middle" fill="#000000d9" font-family="Segoe UI, sans-serif" font-size="26" font-weight="800">
+					${labelLines[1]}
+				</text>
 				<text x="72" y="98" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="26" font-weight="700">
 					${labelLines[0]}
 				</text>
@@ -447,6 +453,9 @@ function renderKeySvg(
 				</text>
 			`
 		: `
+				<text x="74" y="112" text-anchor="middle" fill="#000000d9" font-family="Segoe UI, sans-serif" font-size="26" font-weight="800">
+					${labelLines[0] ?? ""}
+				</text>
 				<text x="72" y="110" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="26" font-weight="700">
 					${labelLines[0] ?? ""}
 				</text>
