@@ -1,11 +1,14 @@
 import {
   action, DialAction, DialRotateEvent, DidReceiveSettingsEvent, KeyAction, KeyDownEvent,
-  SingletonAction, TouchTapEvent, WillAppearEvent, WillDisappearEvent
+	PropertyInspectorDidAppearEvent, SendToPluginEvent, SingletonAction, TouchTapEvent, WillAppearEvent, WillDisappearEvent
 } from '@elgato/streamdeck';
 
+import streamDeck from '@elgato/streamdeck';
+
+import { audioSessionProvider } from '../services/audio-session-provider';
 import { mixerRuntime } from '../services/mixer-runtime';
 
-import type { MixerSlotSettings, SessionVisibility } from "../types/mixer";
+import type { MixerInspectorPreview, MixerInspectorRequest, MixerSlotSettings, SessionVisibility } from "../types/mixer";
 
 export const MIXER_SLOT_UUID = "com.david-valachovic.levcon.mixer.slot";
 
@@ -17,6 +20,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
 		this.registerAction(ev.action, settings);
 		await this.render(ev.action, settings);
+		await this.sendPreview(settings, ev.action.device.id, resolveSlotIndex(ev.action, settings));
 	}
 
 	override async onDialRotate(ev: DialRotateEvent<MixerSlotSettings>): Promise<void> {
@@ -48,6 +52,24 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
 		this.registerAction(ev.action, settings);
 		await this.render(ev.action, settings);
+		await this.sendPreview(settings, ev.action.device.id, resolveSlotIndex(ev.action, settings));
+	}
+
+	override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent<MixerSlotSettings>): Promise<void> {
+		const settings = await this.ensureSettings(ev.action, await ev.action.getSettings<MixerSlotSettings>());
+		await this.sendPreview(settings, ev.action.device.id, resolveSlotIndex(ev.action, settings));
+	}
+
+	override async onSendToPlugin(ev: SendToPluginEvent<MixerInspectorRequest, MixerSlotSettings>): Promise<void> {
+		if (ev.payload.type !== "requestPreview") {
+			return;
+		}
+
+		const settings = await this.ensureSettings(
+			ev.action,
+			ev.payload.settings ?? await ev.action.getSettings<MixerSlotSettings>(),
+		);
+		await this.sendPreview(settings, ev.action.device.id, resolveSlotIndex(ev.action, settings));
 	}
 
 	override onWillDisappear(ev: WillDisappearEvent<MixerSlotSettings>): void {
@@ -88,6 +110,42 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		}
 
 		return nextSettings;
+	}
+
+	private async sendPreview(settings: MixerSlotSettings, deviceId: string, slotIndex: number): Promise<void> {
+		try {
+			const filter = settings.showApps ?? defaultVisibility();
+			const [sessions, view] = await Promise.all([
+				audioSessionProvider.listSessions(filter),
+				mixerRuntime.getView(deviceId, slotIndex, filter),
+			]);
+
+			const payload: MixerInspectorPreview = {
+				type: "preview",
+				currentSessionId: view.session?.id,
+				filter,
+				page: view.page,
+				sessionCount: sessions.length,
+				sessions,
+				slotIndex,
+				totalPages: view.totalPages,
+			};
+
+			await streamDeck.ui.sendToPropertyInspector(payload);
+		} catch (error) {
+			const payload: MixerInspectorPreview = {
+				type: "preview",
+				error: error instanceof Error ? error.message : "Unknown audio preview error.",
+				filter: settings.showApps ?? defaultVisibility(),
+				page: 0,
+				sessionCount: 0,
+				sessions: [],
+				slotIndex,
+				totalPages: 1,
+			};
+
+			await streamDeck.ui.sendToPropertyInspector(payload);
+		}
 	}
 }
 

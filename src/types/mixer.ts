@@ -15,6 +15,23 @@ export type MixerSlotSettings = {
 	stepSize?: number;
 };
 
+export type MixerInspectorRequest = {
+	type: "requestPreview";
+	settings?: MixerSlotSettings;
+};
+
+export type MixerInspectorPreview = {
+	type: "preview";
+	currentSessionId?: string;
+	error?: string;
+	filter: SessionVisibility;
+	page: number;
+	sessionCount: number;
+	sessions: MixerSession[];
+	slotIndex: number;
+	totalPages: number;
+};
+
 export type MixerViewModel = {
 	page: number;
 	totalPages: number;
