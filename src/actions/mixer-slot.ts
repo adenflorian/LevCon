@@ -380,12 +380,14 @@ function dialIconStateKey(
 }
 
 function renderDialIconSvg(
-	session?: { iconDataUri?: string; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean; recentlyActive?: boolean },
+	session?: { iconDataUri?: string; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean; recentlyActive?: boolean; active?: boolean },
 	muted = false,
 ): string {
 	if (!session) {
 		return renderTransparentAssetSvg(64, 64);
 	}
+
+	const dimmed = session.recentlyActive === false && session.active === false;
 
 	const icon = session.isOutputVolume
 		? outputVolumeGlyphSvg()
@@ -394,9 +396,9 @@ function renderDialIconSvg(
 			displayName: session.displayName ?? "Session",
 			isSystemSoundsSession: session.isSystemSoundsSession,
 		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg()));
-	const iconOpacity = muted ? (session.recentlyActive === false ? "0.38" : "0.56") : (session.recentlyActive === false ? "0.62" : "1");
-	const filter = session.recentlyActive === false ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
-	const filterAttribute = session.recentlyActive === false ? ' filter="url(#inactive-icon)"' : '';
+	const iconOpacity = muted ? "0.75" : (dimmed ? "0.75" : "1");
+	const filter = dimmed ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
+	const filterAttribute = dimmed ? ' filter="url(#inactive-icon)"' : '';
 	const mutedOverlay = muted ? renderMutedOverlaySvg(50, 7, 7) : '';
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
@@ -409,7 +411,7 @@ function renderDialIconSvg(
 }
 
 function renderKeySvg(
-	session?: { iconDataUri?: string; muted?: boolean; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean; recentlyActive?: boolean },
+	session?: { iconDataUri?: string; muted?: boolean; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean; recentlyActive?: boolean; active?: boolean },
 ): string {
 	const labelLines = session ? keyLabelLines({
 		shortDisplayName: session.shortDisplayName,
@@ -417,6 +419,7 @@ function renderKeySvg(
 		isSystemSoundsSession: session.isSystemSoundsSession,
 		isOutputVolume: session.isOutputVolume,
 	}).map(escapeXml) : [];
+
 	const icon = session
 		? (session.isOutputVolume
 			? outputVolumeGlyphSvg()
@@ -426,8 +429,9 @@ function renderKeySvg(
 			isSystemSoundsSession: session.isSystemSoundsSession,
 		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg())))
 		: undefined;
+		
 	const muted = session?.muted ?? false;
-	const inactive = session?.recentlyActive === false;
+	const inactive = session?.recentlyActive === false && session?.active === false;
 	const iconOpacity = muted ? (inactive ? "0.38" : "0.5") : (inactive ? "0.62" : "1");
 	const filter = inactive ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
 	const filterAttribute = inactive ? ' filter="url(#inactive-icon)"' : '';
