@@ -6,7 +6,7 @@
 		{
 			"Name": "Mixer Slot",
 			"UUID": "com.david-valachovic.levcon.mixer.slot",
-			"Icon": "imgs/actions/counter/icon",
+			"Icon": "imgs/plugin/category-icon",
 			"Tooltip": "Displays a paged application volume slot.",
 			"PropertyInspectorPath": "ui/mixer-slot.html",
 			"Controllers": [
@@ -15,7 +15,7 @@
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/counter/key",
+					"Image": "imgs/plugin/category-icon",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -23,7 +23,7 @@
 		{
 			"Name": "Page Left",
 			"UUID": "com.david-valachovic.levcon.mixer.previous",
-			"Icon": "imgs/actions/counter/icon",
+			"Icon": "imgs/plugin/category-icon",
 			"Tooltip": "Shows the previous page of app volume slots.",
 			"PropertyInspectorPath": "ui/mixer-page.html",
 			"Controllers": [
@@ -31,7 +31,7 @@
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/counter/key",
+					"Image": "imgs/plugin/category-icon",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -39,7 +39,7 @@
 		{
 			"Name": "Page Right",
 			"UUID": "com.david-valachovic.levcon.mixer.next",
-			"Icon": "imgs/actions/counter/icon",
+			"Icon": "imgs/plugin/category-icon",
 			"Tooltip": "Shows the next page of app volume slots.",
 			"PropertyInspectorPath": "ui/mixer-page.html",
 			"Controllers": [
@@ -47,7 +47,7 @@
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/counter/key",
+					"Image": "imgs/plugin/category-icon",
 					"TitleAlignment": "middle"
 				}
 			]
