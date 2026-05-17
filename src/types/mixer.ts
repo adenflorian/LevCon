@@ -16,6 +16,7 @@ export type MixerSession = {
 	volume: number;
 	muted: boolean;
 	active: boolean;
+	lastAudibleAt?: number;
 	recentlyActive?: boolean;
 };
 

@@ -269,6 +269,7 @@ export class AudioSessionProvider {
 
 			return {
 				...session,
+				lastAudibleAt: session.isOutputVolume ? now : lastActiveAt,
 				recentlyActive: session.isOutputVolume || audiblyActive || (lastActiveAt !== undefined && now - lastActiveAt < INACTIVE_ICON_DELAY_MS),
 			};
 		});
@@ -489,9 +490,9 @@ function compareSessions(left: MixerSession, right: MixerSession): number {
 		return priorityComparison;
 	}
 
-	const audibleRank = compareBooleanRank(Boolean(left.recentlyActive), Boolean(right.recentlyActive));
-	if (audibleRank !== 0) {
-		return audibleRank;
+	const audibleTimestampRank = compareLastAudibleAt(left, right);
+	if (audibleTimestampRank !== 0) {
+		return audibleTimestampRank;
 	}
 
 	const labelRank = baseLabel(left).localeCompare(baseLabel(right), undefined, { sensitivity: "base" });
@@ -529,6 +530,10 @@ function comparePriorityRank(left: MixerSession, right: MixerSession): number {
 	}
 
 	return leftRank - rightRank;
+}
+
+function compareLastAudibleAt(left: MixerSession, right: MixerSession): number {
+	return (right.lastAudibleAt ?? 0) - (left.lastAudibleAt ?? 0);
 }
 
 function priorityRank(session: MixerSession): number {
