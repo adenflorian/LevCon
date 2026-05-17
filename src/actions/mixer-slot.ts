@@ -1,7 +1,7 @@
 import streamDeck, {
-    action, BarSubType, DialAction, DialRotateEvent, DidReceiveSettingsEvent, FeedbackPayload,
-    KeyAction, KeyDownEvent, PropertyInspectorDidAppearEvent, SendToPluginEvent, SingletonAction,
-    TouchTapEvent, WillAppearEvent, WillDisappearEvent
+	action, BarSubType, DialAction, DialRotateEvent, DidReceiveSettingsEvent, FeedbackPayload,
+	KeyAction, KeyDownEvent, PropertyInspectorDidAppearEvent, SendToPluginEvent, SingletonAction,
+	TouchTapEvent, WillAppearEvent, WillDisappearEvent
 } from '@elgato/streamdeck';
 
 import { audioSessionProvider } from '../services/audio-session-provider';
@@ -12,6 +12,7 @@ import type { MixerGlobalSettings, MixerInspectorPreview, MixerInspectorRequest,
 export const MIXER_SLOT_UUID = "com.david-valachovic.levcon.mixer.slot";
 const DIAL_LAYOUT = "layouts/mixer-slot.json";
 const DEFAULT_STEP_SIZE = 5;
+const DEFAULT_VISIBILITY: SessionVisibility = "all";
 
 type MixerSlotActionInstance = DialAction<MixerSlotSettings> | KeyAction<MixerSlotSettings>;
 type DialRenderState = {
@@ -44,7 +45,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
 		await ensureGlobalSettingsLoaded();
 		const stepSize = globalStepSize;
-		const session = await mixerRuntime.adjustSlot(ev.action.device.id, resolveSlotIndex(ev.action, settings), settings.showApps ?? "all", stepSize * ev.payload.ticks);
+		const session = await mixerRuntime.adjustSlot(ev.action.device.id, resolveSlotIndex(ev.action, settings), DEFAULT_VISIBILITY, stepSize * ev.payload.ticks);
 		if (!session) {
 			await ev.action.showAlert();
 			return;
@@ -55,7 +56,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 
 	override async onKeyDown(ev: KeyDownEvent<MixerSlotSettings>): Promise<void> {
 		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
-		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action, settings), settings.showApps ?? "all");
+		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action, settings), DEFAULT_VISIBILITY);
 		if (!changed) {
 			await ev.action.showAlert();
 		}
@@ -63,7 +64,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 
 	override async onTouchTap(ev: TouchTapEvent<MixerSlotSettings>): Promise<void> {
 		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
-		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action, settings), settings.showApps ?? "all");
+		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action, settings), DEFAULT_VISIBILITY);
 		if (!changed) {
 			await ev.action.showAlert();
 		}
@@ -103,14 +104,14 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		mixerRuntime.registerSlot({
 			contextId: action.id,
 			deviceId: action.device.id,
-			filter: settings.showApps ?? "all",
+			filter: DEFAULT_VISIBILITY,
 			slotIndex: resolveSlotIndex(action, settings),
 			refresh: () => this.render(action, settings),
 		});
 	}
 
 	private async render(action: MixerSlotActionInstance, settings: MixerSlotSettings): Promise<void> {
-		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action, settings), settings.showApps ?? "all");
+		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action, settings), DEFAULT_VISIBILITY);
 		if (!view.session) {
 			if (action.isDial()) {
 				this.dialRenderStateByContext.delete(action.id);
@@ -132,11 +133,10 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 			return;
 		}
 
-		const muteLabel = view.session.muted ? "M" : `${view.session.volume}%`;
 		if (action.isDial()) {
 			await this.renderDialSession(action, view.session);
 		} else {
-			await action.setImage(renderKeySvg(view.session, muteLabel));
+			await action.setImage(renderKeySvg(view.session));
 		}
 
 		await action.setTitle("");
@@ -191,8 +191,13 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	}
 
 	private async ensureSettings(action: MixerSlotActionInstance, settings: MixerSlotSettings): Promise<MixerSlotSettings> {
-		const nextSettings = withDefaults(action, settings);
-		if (!sameSettings(settings, nextSettings)) {
+		const storedSettings = await action.getSettings<MixerSlotSettings>();
+		const mergedSettings = {
+			...storedSettings,
+			...settings,
+		};
+		const nextSettings = withDefaults(action, mergedSettings);
+		if (!sameSettings(storedSettings, nextSettings)) {
 			await action.setSettings(nextSettings);
 		}
 
@@ -201,7 +206,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 
 	private async sendPreview(settings: MixerSlotSettings, deviceId: string, slotIndex: number): Promise<void> {
 		try {
-			const filter = settings.showApps ?? defaultVisibility();
+			const filter = DEFAULT_VISIBILITY;
 			const [sessions, view] = await Promise.all([
 				audioSessionProvider.listSessions(filter),
 				mixerRuntime.getView(deviceId, slotIndex, filter),
@@ -223,7 +228,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 			const payload: MixerInspectorPreview = {
 				type: "preview",
 				error: error instanceof Error ? error.message : "Unknown audio preview error.",
-				filter: settings.showApps ?? defaultVisibility(),
+				filter: DEFAULT_VISIBILITY,
 				page: 0,
 				sessionCount: 0,
 				sessions: [],
@@ -247,6 +252,31 @@ function labelForSession(session: { displayName: string; shortDisplayName?: stri
 
 	const label = session.shortDisplayName ?? session.displayName;
 	return label.length <= 8 ? label : `${label.slice(0, 8)}`;
+}
+
+function keyLabelLines(session: { displayName: string; shortDisplayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean }): string[] {
+	if (session.isOutputVolume) {
+		return ["Output"];
+	}
+
+	if (isSystemSession(session)) {
+		return ["System"];
+	}
+
+	const words = session.displayName
+		.split(/\s+/u)
+		.map((part) => part.trim())
+		.filter(Boolean);
+
+	if (words.length >= 2 && words[0].length <= 10) {
+		const firstLine = words[0];
+		const secondLine = words.slice(1).join(" ");
+		if (secondLine.length <= 10) {
+			return [firstLine, secondLine];
+		}
+	}
+
+	return [labelForSession(session)];
 }
 
 
@@ -384,14 +414,13 @@ function renderDialIconSvg(
 
 function renderKeySvg(
 	session?: { iconDataUri?: string; muted?: boolean; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean; recentlyActive?: boolean },
-	valueText?: string,
 ): string {
-	const label = session ? escapeXml(labelForSession({
+	const labelLines = session ? keyLabelLines({
 		shortDisplayName: session.shortDisplayName,
 		displayName: session.displayName ?? "Session",
 		isSystemSoundsSession: session.isSystemSoundsSession,
 		isOutputVolume: session.isOutputVolume,
-	})) : "";
+	}).map(escapeXml) : [];
 	const icon = session
 		? (session.isOutputVolume
 			? outputVolumeGlyphSvg()
@@ -410,7 +439,9 @@ function renderKeySvg(
 		? `<image href="${icon}" x="32" y="22" width="80" height="80" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet"${filterAttribute} />`
 		: "";
 	const mutedOverlay = muted ? renderMutedOverlaySvg(28, 86, 68) : '';
-	const value = valueText ? `<text x="72" y="126" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="15" font-weight="700">${escapeXml(valueText)}</text>` : "";
+	const label = labelLines.length > 1
+		? `<text x="72" y="98" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="20" font-weight="700">${labelLines[0]}</text><text x="72" y="120" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="20" font-weight="700">${labelLines[1]}</text>`
+		: `<text x="72" y="110" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="22" font-weight="700">${labelLines[0] ?? ""}</text>`;
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
@@ -418,8 +449,7 @@ function renderKeySvg(
 			${filter}
 			${image}
 			${mutedOverlay}
-			<text x="72" y="110" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="22" font-weight="700">${label}</text>
-			${value}
+			${label}
 		</svg>
 	`)}`;
 }
@@ -433,19 +463,13 @@ function resolveSlotIndex(action: MixerSlotActionInstance, settings: MixerSlotSe
 }
 
 function sameSettings(left: MixerSlotSettings, right: MixerSlotSettings): boolean {
-	return left.showApps === right.showApps
-		&& left.slotIndex === right.slotIndex;
+	return left.slotIndex === right.slotIndex;
 }
 
 function withDefaults(action: MixerSlotActionInstance, settings: MixerSlotSettings): MixerSlotSettings {
 	return {
-		showApps: settings.showApps ?? defaultVisibility(),
 		slotIndex: settings.slotIndex ?? (action.coordinates?.column ?? 0),
 	};
-}
-
-function defaultVisibility(): SessionVisibility {
-	return "active";
 }
 
 async function ensureGlobalSettingsLoaded(): Promise<void> {

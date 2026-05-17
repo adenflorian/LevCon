@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Management;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NAudio.CoreAudioApi;
@@ -227,6 +228,7 @@ static object ListSessions(string visibility)
   using var device = GetDefaultRenderDevice();
   var sessions = device.AudioSessionManager.Sessions;
   var visibleSessions = new List<SessionDto>();
+  var processCommandLineById = new Dictionary<uint, string?>();
 
   for (var index = 0; index < sessions.Count; index += 1)
   {
@@ -244,6 +246,7 @@ static object ListSessions(string visibility)
         BuildIconDataUri(session),
         BuildProcessName(session),
         session.GetProcessID,
+        GetCachedProcessCommandLine(session.GetProcessID, processCommandLineById),
       false,
       session.GetSessionIdentifier,
       session.GetSessionInstanceIdentifier,
@@ -267,6 +270,7 @@ static SessionDto BuildEndpointVolume(MMDevice device)
     null,
     "System",
     0,
+    null,
     true,
     device.ID,
     device.ID,
@@ -349,6 +353,46 @@ static string? TryGetProcessPath(uint processId)
   }
 }
 
+static string? GetCachedProcessCommandLine(uint processId, IDictionary<uint, string?> cache)
+{
+  if (processId == 0)
+  {
+    return null;
+  }
+
+  if (!cache.TryGetValue(processId, out var commandLine))
+  {
+    commandLine = TryGetProcessCommandLine(processId);
+    cache[processId] = commandLine;
+  }
+
+  return commandLine;
+}
+
+static string? TryGetProcessCommandLine(uint processId)
+{
+  if (processId == 0)
+  {
+    return null;
+  }
+
+  try
+  {
+    using var searcher = new ManagementObjectSearcher($"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {processId}");
+    using var results = searcher.Get();
+    foreach (ManagementObject process in results)
+    {
+      return process["CommandLine"]?.ToString();
+    }
+  }
+  catch
+  {
+    return null;
+  }
+
+  return null;
+}
+
 record MutationResult(bool Ok);
 
 record ErrorResult(string Error);
@@ -366,6 +410,7 @@ record SessionDto(
   string? IconDataUri,
   string ProcessName,
   uint ProcessId,
+  string? ProcessCommandLine,
   bool IsOutputVolume,
   string? SessionIdentifier,
   string? SessionInstanceIdentifier,

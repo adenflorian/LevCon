@@ -6,6 +6,7 @@ export type MixerSession = {
 	iconDataUri?: string;
 	processName: string;
 	processId?: number;
+	processCommandLine?: string;
 	isOutputVolume?: boolean;
 	sessionIdentifier?: string;
 	sessionInstanceIdentifier?: string;
@@ -21,7 +22,6 @@ export type MixerSession = {
 };
 
 export type MixerSlotSettings = {
-	showApps?: SessionVisibility;
 	slotIndex?: number;
 };
 

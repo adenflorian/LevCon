@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { MixerSession, SessionVisibility } from "../types/mixer";
 
 const INACTIVE_ICON_DELAY_MS = 5_000;
+const PEAK_ACTIVITY_THRESHOLD = 0.001;
 let sessionPriorityMatchers: string[] = [];
 
 type HelperListResponse = {
@@ -140,11 +141,14 @@ export class AudioSessionProvider {
 	private async fetchSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
 		const response = await this.runHelper<HelperListResponse>({
 			command: "list",
-			visibility,
+			visibility: "all",
 		});
 		const sessions = normalizeSessions(this.decorateRecentActivity(this.applyOptimisticState([response.endpoint, ...response.sessions])));
-		this.cachedSessionsByVisibility.set(visibility, sessions);
-		return sessions;
+		const visibleSessions = visibility === "active"
+			? sessions.filter((session) => session.isOutputVolume || session.recentlyActive)
+			: sessions;
+		this.cachedSessionsByVisibility.set(visibility, visibleSessions);
+		return visibleSessions;
 	}
 
 	private async refreshAllSessionCaches(): Promise<void> {
@@ -262,15 +266,16 @@ export class AudioSessionProvider {
 
 		const nextSessions = sessions.map((session) => {
 			liveSessionIds.add(session.id);
-			const lastActiveAt = session.active ? now : this.lastActiveAtBySessionId.get(session.id);
+			const audiblyActive = isAudiblyActive(session);
+			const lastActiveAt = audiblyActive ? now : this.lastActiveAtBySessionId.get(session.id);
 
-			if (session.active) {
+			if (audiblyActive) {
 				this.lastActiveAtBySessionId.set(session.id, now);
 			}
 
 			return {
 				...session,
-				recentlyActive: session.active || (lastActiveAt !== undefined && now - lastActiveAt < INACTIVE_ICON_DELAY_MS),
+				recentlyActive: session.isOutputVolume || audiblyActive || (lastActiveAt !== undefined && now - lastActiveAt < INACTIVE_ICON_DELAY_MS),
 			};
 		});
 
@@ -350,6 +355,15 @@ function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
 			};
 		}
 
+		const discordLabels = discordDuplicateLabels(session, group);
+		if (discordLabels) {
+			return {
+				...session,
+				displayName: discordLabels.displayName,
+				shortDisplayName: discordLabels.shortDisplayName,
+			};
+		}
+
 		const suffix = duplicateSuffix(session, group);
 		const label = `${baseLabel(session)} (${suffix})`;
 
@@ -388,12 +402,80 @@ function compactLabel(label: string, suffix?: string): string {
 }
 
 function duplicateSuffix(session: MixerSession, group: MixerSession[]): string {
-	if (session.processId) {
-		return `${session.processId}`.slice(-3);
+	const orderedGroup = [...group].sort(compareDuplicateSessions);
+	const index = orderedGroup.findIndex((candidate) => candidate.id === session.id);
+	return `${index + 1}`;
+}
+
+function discordDuplicateLabels(session: MixerSession, group: MixerSession[]): { displayName: string; shortDisplayName: string } | undefined {
+	if (!isDiscordSession(session) || !group.every(isDiscordSession)) {
+		return undefined;
 	}
 
-	const index = group.findIndex((candidate) => candidate.id === session.id);
-	return `${index + 1}`;
+	const role = discordRole(session.processCommandLine);
+	if (!role) {
+		return undefined;
+	}
+
+	const orderedGroup = [...group].sort(compareDuplicateSessions);
+	const matchingRole = orderedGroup.filter((candidate) => discordRole(candidate.processCommandLine) === role);
+	const index = matchingRole.findIndex((candidate) => candidate.id === session.id);
+	const suffix = matchingRole.length > 1 ? ` ${index + 1}` : "";
+
+	if (role === "app") {
+		return {
+			displayName: `Discord App${suffix}`,
+			shortDisplayName: `D App${suffix}`,
+		};
+	}
+
+	return {
+		displayName: `Discord Voice${suffix}`,
+		shortDisplayName: `D Vc${suffix}`,
+	};
+}
+
+function isDiscordSession(session: MixerSession): boolean {
+	return normalizeKey(baseLabel(session)) === "discord" || normalizeKey(session.processName).replace(/\.exe$/i, "") === "discord";
+}
+
+function discordRole(processCommandLine: string | undefined): "app" | "voice" | undefined {
+	const commandLine = normalizeKey(processCommandLine ?? "");
+	if (!commandLine) {
+		return undefined;
+	}
+
+	if (commandLine.includes("--utility-sub-type=audio.mojom.audioservice")) {
+		return "app";
+	}
+
+	if (commandLine.includes("--type=renderer")) {
+		return "voice";
+	}
+
+	return undefined;
+}
+
+function compareDuplicateSessions(left: MixerSession, right: MixerSession): number {
+	const processIdComparison = compareNumber(left.processId, right.processId);
+	if (processIdComparison !== 0) {
+		return processIdComparison;
+	}
+
+	const sessionIdentifierComparison = compareText(left.sessionIdentifier, right.sessionIdentifier);
+	if (sessionIdentifierComparison !== 0) {
+		return sessionIdentifierComparison;
+	}
+
+	return compareText(left.id, right.id);
+}
+
+function compareNumber(left: number | undefined, right: number | undefined): number {
+	return (left ?? Number.MAX_SAFE_INTEGER) - (right ?? Number.MAX_SAFE_INTEGER);
+}
+
+function compareText(left: string | undefined, right: string | undefined): number {
+	return (left ?? "").localeCompare(right ?? "");
 }
 
 function normalizeKey(value: string): string {
@@ -484,4 +566,8 @@ function normalizePriorityMatchers(matchers: string[] | undefined): string[] {
 	}
 
 	return [...new Set(matchers.map((matcher) => normalizeKey(matcher)).filter(Boolean))];
+}
+
+function isAudiblyActive(session: MixerSession): boolean {
+	return (session.peakValue ?? 0) > PEAK_ACTIVITY_THRESHOLD;
 }

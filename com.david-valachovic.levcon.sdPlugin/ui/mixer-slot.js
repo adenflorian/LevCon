@@ -8,7 +8,6 @@ const elements = {
   previewStatus: document.getElementById("previewStatus"),
   refreshPreview: document.getElementById("refreshPreview"),
   sessionPreview: document.getElementById("sessionPreview"),
-  showApps: document.getElementById("showApps"),
   slotIndexNumber: document.getElementById("slotIndexNumber"),
   slotIndexRange: document.getElementById("slotIndexRange"),
   stepSizeNumber: document.getElementById("stepSizeNumber"),
@@ -27,6 +26,7 @@ window.connectElgatoStreamDeckSocket = (
   const actionInfo = JSON.parse(inActionInfo);
   actionContext = actionInfo.context;
   actionUuid = actionInfo.action;
+  applyActionSettings(actionInfo.payload?.settings ?? {});
 
   websocket = new WebSocket(`ws://127.0.0.1:${inPort}`);
   websocket.addEventListener("open", () => {
@@ -68,7 +68,6 @@ bindMirroredInputs(
   25,
   persistGlobalSettings,
 );
-elements.showApps.addEventListener("change", persistSettings);
 elements.priorityMatchers.addEventListener("input", () => {
   persistGlobalSettings();
   requestPreview();
@@ -76,7 +75,6 @@ elements.priorityMatchers.addEventListener("input", () => {
 elements.refreshPreview.addEventListener("click", () => requestPreview());
 
 function applyActionSettings(settings) {
-  elements.showApps.value = settings.showApps ?? "active";
   setMirroredValue(
     elements.slotIndexRange,
     elements.slotIndexNumber,
@@ -126,7 +124,6 @@ function clampNumber(value, min, max, fallback) {
 
 function currentActionSettings() {
   return {
-    showApps: elements.showApps.value,
     slotIndex: clampNumber(elements.slotIndexNumber.value, 0, 7, 0),
   };
 }
