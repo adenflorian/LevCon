@@ -183,7 +183,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	}
 }
 
-function labelForSession(session: { displayName: string; shortDisplayName?: string }): string {
+function labelForSession(session: { displayName: string; shortDisplayName?: string; isSystemSoundsSession?: boolean }): string {
 	if (isSystemSession(session)) {
 		return "System";
 	}
@@ -193,7 +193,7 @@ function labelForSession(session: { displayName: string; shortDisplayName?: stri
 }
 
 
-function dialLabel(session: { displayName: string }): string {
+function dialLabel(session: { displayName: string; shortDisplayName?: string; isSystemSoundsSession?: boolean }): string {
 	if (isSystemSession(session)) {
 		return "System Sounds";
 	}
@@ -201,11 +201,15 @@ function dialLabel(session: { displayName: string }): string {
 	return session.displayName.length <= 18 ? session.displayName : `${session.displayName.slice(0, 18)}...`;
 }
 
-function isSystemSession(session: { displayName: string; shortDisplayName?: string }): boolean {
+function isSystemSession(session: { displayName: string; shortDisplayName?: string; isSystemSoundsSession?: boolean }): boolean {
+	if (session.isSystemSoundsSession) {
+		return true;
+	}
+
 	const normalizedDisplayName = session.displayName.trim().toLowerCase();
 	const normalizedShortName = session.shortDisplayName?.trim().toLowerCase();
 	return normalizedDisplayName === "system sounds" || normalizedShortName === "system";
-	}
+}
 
 function escapeXml(value: string): string {
 	return value
@@ -243,45 +247,56 @@ function renderDialBackgroundSvg(): string {
 }
 
 function renderDialIconSvg(
-	session?: { iconDataUri?: string; shortDisplayName?: string; displayName?: string },
+	session?: { iconDataUri?: string; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; recentlyActive?: boolean },
 	muted = false,
 ): string {
 	const icon = session
 		? (isSystemSession({
 			shortDisplayName: session.shortDisplayName,
 			displayName: session.displayName ?? "Session",
+			isSystemSoundsSession: session.isSystemSoundsSession,
 		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg()))
 		: fallbackGlyphSvg();
-	const iconOpacity = muted ? "0.52" : "1";
+	const iconOpacity = muted ? (session?.recentlyActive === false ? "0.24" : "0.52") : (session?.recentlyActive === false ? "0.42" : "1");
+	const filter = session?.recentlyActive === false ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
+	const filterAttribute = session?.recentlyActive === false ? ' filter="url(#inactive-icon)"' : '';
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-			<image href="${icon}" x="6" y="6" width="52" height="52" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet" />
+			${filter}
+			<image href="${icon}" x="6" y="6" width="52" height="52" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet"${filterAttribute} />
 		</svg>
 	`)}`;
 }
 
 function renderKeySvg(
-	session?: { iconDataUri?: string; muted?: boolean; shortDisplayName?: string; displayName?: string },
+	session?: { iconDataUri?: string; muted?: boolean; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; recentlyActive?: boolean },
 	valueText?: string,
 ): string {
 	const label = session ? escapeXml(labelForSession({
 		shortDisplayName: session.shortDisplayName,
 		displayName: session.displayName ?? "Session",
+		isSystemSoundsSession: session.isSystemSoundsSession,
 	})) : "";
 	const icon = session
 		? (isSystemSession({
 			shortDisplayName: session.shortDisplayName,
 			displayName: session.displayName ?? "Session",
+			isSystemSoundsSession: session.isSystemSoundsSession,
 		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg()))
 		: fallbackGlyphSvg();
 	const muted = session?.muted ?? false;
+	const inactive = session?.recentlyActive === false;
+	const iconOpacity = muted ? (inactive ? "0.24" : "0.5") : (inactive ? "0.42" : "1");
+	const filter = inactive ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
+	const filterAttribute = inactive ? ' filter="url(#inactive-icon)"' : '';
 	const value = valueText ? `<text x="72" y="126" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="15" font-weight="700">${escapeXml(valueText)}</text>` : "";
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
 			<rect x="6" y="6" width="132" height="132" rx="18" fill="#0f1318" stroke="#2a3139" stroke-width="2"/>
-			<image href="${icon}" x="32" y="22" width="80" height="80" opacity="${muted ? "0.5" : "1"}" preserveAspectRatio="xMidYMid meet" />
+			${filter}
+			<image href="${icon}" x="32" y="22" width="80" height="80" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet"${filterAttribute} />
 			<text x="72" y="110" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="22" font-weight="700">${label}</text>
 			${value}
 		</svg>

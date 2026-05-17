@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import type { MixerSession, SessionVisibility } from "../types/mixer";
 
 const execFileAsync = promisify(execFile);
+const INACTIVE_ICON_DELAY_MS = 5_000;
 
 type HelperListResponse = {
 	sessions: MixerSession[];
@@ -20,10 +21,11 @@ export class AudioSessionProvider {
 	readonly mode = "helper";
 
 	private helperExecutablePath?: string;
+	private readonly lastActiveAtBySessionId = new Map<string, number>();
 
 	async listSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
 		const response = await this.runHelper<HelperListResponse>(["list", "--visibility", visibility]);
-		return normalizeSessions(response.sessions);
+		return normalizeSessions(this.decorateRecentActivity(response.sessions));
 	}
 
 	async adjustVolume(sessionId: string, delta: number): Promise<boolean> {
@@ -83,6 +85,33 @@ export class AudioSessionProvider {
 		}
 
 		return JSON.parse(stdout) as T;
+	}
+
+	private decorateRecentActivity(sessions: MixerSession[]): MixerSession[] {
+		const now = Date.now();
+		const liveSessionIds = new Set<string>();
+
+		const nextSessions = sessions.map((session) => {
+			liveSessionIds.add(session.id);
+			const lastActiveAt = session.active ? now : this.lastActiveAtBySessionId.get(session.id);
+
+			if (session.active) {
+				this.lastActiveAtBySessionId.set(session.id, now);
+			}
+
+			return {
+				...session,
+				recentlyActive: session.active || (lastActiveAt !== undefined && now - lastActiveAt < INACTIVE_ICON_DELAY_MS),
+			};
+		});
+
+		for (const [sessionId, lastActiveAt] of this.lastActiveAtBySessionId.entries()) {
+			if (!liveSessionIds.has(sessionId) && now - lastActiveAt >= INACTIVE_ICON_DELAY_MS) {
+				this.lastActiveAtBySessionId.delete(sessionId);
+			}
+		}
+
+		return nextSessions;
 	}
 }
 

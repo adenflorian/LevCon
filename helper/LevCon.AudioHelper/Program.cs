@@ -59,6 +59,11 @@ static object AdjustVolume(string sessionId, int delta)
 
 static string BuildDisplayName(AudioSessionControl session)
 {
+	if (session.IsSystemSoundsSession)
+	{
+		return "System Sounds";
+	}
+
   if (!string.IsNullOrWhiteSpace(session.DisplayName))
   {
     return session.DisplayName;
@@ -70,7 +75,7 @@ static string BuildDisplayName(AudioSessionControl session)
     return processName;
   }
 
-  return session.IsSystemSoundsSession ? "System Sounds" : $"PID {session.GetProcessID}";
+  return $"PID {session.GetProcessID}";
 }
 
 static string? BuildIconDataUri(AudioSessionControl session)
@@ -169,6 +174,12 @@ static object ListSessions(string visibility)
         BuildIconDataUri(session),
         BuildProcessName(session),
         session.GetProcessID,
+      session.GetSessionIdentifier,
+      session.GetSessionInstanceIdentifier,
+      session.GetGroupingParam().ToString(),
+      session.State.ToString(),
+      session.AudioMeterInformation.MasterPeakValue,
+      session.IsSystemSoundsSession,
         (int)Math.Round(session.SimpleAudioVolume.Volume * 100f),
         session.SimpleAudioVolume.Mute,
         active));
@@ -248,6 +259,12 @@ record SessionDto(
   string? IconDataUri,
   string ProcessName,
   uint ProcessId,
+  string? SessionIdentifier,
+  string? SessionInstanceIdentifier,
+  string GroupingParam,
+  string State,
+  float PeakValue,
+  bool IsSystemSoundsSession,
   int Volume,
   bool Muted,
   bool Active

@@ -134,11 +134,56 @@ function handlePluginMessage(payload) {
 
     const meta = document.createElement("div");
     meta.className = "session-meta";
-    meta.textContent = `${session.processName || "unknown"} • ${session.volume}%${session.muted ? " • muted" : ""}${session.active ? " • active" : ""}`;
+    meta.textContent = `${session.processName || "unknown"} • pid ${session.processId ?? "n/a"} • ${session.volume}%${session.muted ? " • muted" : ""}${session.active ? " • active" : ""}${session.recentlyActive === false ? " • dimmed" : ""}`;
 
-    item.append(name, meta);
+    const details = document.createElement("div");
+    details.className = "session-details";
+    appendDetail(details, "ID", session.id);
+    appendDetail(details, "Session ID", session.sessionIdentifier);
+    appendDetail(details, "Instance ID", session.sessionInstanceIdentifier);
+    appendDetail(details, "Grouping", session.groupingParam);
+    appendDetail(details, "State", session.state);
+    appendDetail(details, "Peak", formatPeakValue(session.peakValue));
+    appendDetail(details, "System Session", formatBoolean(session.isSystemSoundsSession));
+    appendDetail(details, "Recent Activity", formatBoolean(session.recentlyActive));
+
+    item.append(name, meta, details);
     elements.sessionPreview.append(item);
   }
+}
+
+function appendDetail(container, label, value) {
+  if (value === undefined || value === null || value === "") {
+    return;
+  }
+
+  const row = document.createElement("div");
+
+  const detailLabel = document.createElement("span");
+  detailLabel.className = "session-detail-label";
+  detailLabel.textContent = `${label}:`;
+
+  const detailValue = document.createElement("span");
+  detailValue.textContent = `${value}`;
+
+  row.append(detailLabel, detailValue);
+  container.append(row);
+}
+
+function formatBoolean(value) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return value ? "yes" : "no";
+}
+
+function formatPeakValue(value) {
+  if (typeof value !== "number") {
+    return undefined;
+  }
+
+  return value.toFixed(4);
 }
 
 function persistSettings() {
