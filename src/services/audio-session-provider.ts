@@ -61,10 +61,7 @@ export class AudioSessionProvider {
 
 	public setPriorityMatchers(matchers: string[] | undefined): void {
 		sessionPriorityMatchers = normalizePriorityMatchers(matchers);
-
-		if (this.cachedSessions) {
-			this.cachedSessions = normalizeSessions(this.cachedSessions);
-		}
+		this.cachedSessions = undefined;
 	}
 
 	public setBlacklistMatchers(matchers: string[] | undefined): void {
@@ -492,9 +489,9 @@ function compareSessions(left: MixerSession, right: MixerSession): number {
 		return priorityComparison;
 	}
 
-	const activeRank = compareBooleanRank(left.active, right.active);
-	if (activeRank !== 0) {
-		return activeRank;
+	const audibleRank = compareBooleanRank(Boolean(left.recentlyActive), Boolean(right.recentlyActive));
+	if (audibleRank !== 0) {
+		return audibleRank;
 	}
 
 	const labelRank = baseLabel(left).localeCompare(baseLabel(right), undefined, { sensitivity: "base" });
