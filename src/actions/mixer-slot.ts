@@ -95,7 +95,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 
 		const muteLabel = view.session.muted ? "M" : `${view.session.volume}%`;
 		await action.setImage(view.session.iconDataUri);
-		await action.setTitle(`${labelForSession(view.session.displayName)}\n${muteLabel}`);
+		await action.setTitle(`${labelForSession(view.session)}\n${muteLabel}`);
 		if (action.isDial()) {
 			await action.setTriggerDescription({
 				rotate: "Adjust",
@@ -150,7 +150,8 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	}
 }
 
-function labelForSession(label: string): string {
+function labelForSession(session: { displayName: string; shortDisplayName?: string }): string {
+	const label = session.shortDisplayName ?? session.displayName;
 	return label.length <= 8 ? label : `${label.slice(0, 8)}`;
 }
 

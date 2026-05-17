@@ -5,6 +5,8 @@ export type MixerSession = {
 	displayName: string;
 	iconDataUri?: string;
 	processName: string;
+	processId?: number;
+	shortDisplayName?: string;
 	volume: number;
 	muted: boolean;
 	active: boolean;

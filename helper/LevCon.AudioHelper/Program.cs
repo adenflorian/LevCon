@@ -166,8 +166,9 @@ static object ListSessions(string visibility)
     visibleSessions.Add(new SessionDto(
         GetSessionId(session),
         BuildDisplayName(session),
-      BuildIconDataUri(session),
+        BuildIconDataUri(session),
         BuildProcessName(session),
+        session.GetProcessID,
         (int)Math.Round(session.SimpleAudioVolume.Volume * 100f),
         session.SimpleAudioVolume.Mute,
         active));
@@ -212,13 +213,13 @@ static object ToggleMute(string sessionId)
 
 static string? TryGetProcessName(uint processId)
 {
-	var processPath = TryGetProcessPath(processId);
-	if (!string.IsNullOrWhiteSpace(processPath))
-	{
-		return Path.GetFileName(processPath);
-	}
+  var processPath = TryGetProcessPath(processId);
+  if (!string.IsNullOrWhiteSpace(processPath))
+  {
+    return Path.GetFileName(processPath);
+  }
 
-	return null;
+  return null;
 }
 
 static string? TryGetProcessPath(uint processId)
@@ -241,6 +242,15 @@ static string? TryGetProcessPath(uint processId)
 
 record MutationResult(bool Ok);
 
-record SessionDto(string Id, string DisplayName, string? IconDataUri, string ProcessName, int Volume, bool Muted, bool Active);
+record SessionDto(
+  string Id,
+  string DisplayName,
+  string? IconDataUri,
+  string ProcessName,
+  uint ProcessId,
+  int Volume,
+  bool Muted,
+  bool Active
+);
 
 record SessionListResult(IReadOnlyList<SessionDto> Sessions);

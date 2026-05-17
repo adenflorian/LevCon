@@ -23,7 +23,7 @@ export class AudioSessionProvider {
 
 	async listSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
 		const response = await this.runHelper<HelperListResponse>(["list", "--visibility", visibility]);
-		return response.sessions;
+		return normalizeSessions(response.sessions);
 	}
 
 	async adjustVolume(sessionId: string, delta: number): Promise<boolean> {
@@ -87,3 +87,66 @@ export class AudioSessionProvider {
 }
 
 export const audioSessionProvider = new AudioSessionProvider();
+
+function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
+	const groups = new Map<string, MixerSession[]>();
+
+	for (const session of sessions) {
+		const key = normalizeKey(baseLabel(session));
+		const group = groups.get(key);
+		if (group) {
+			group.push(session);
+		} else {
+			groups.set(key, [session]);
+		}
+	}
+
+	return sessions.map((session) => {
+		const key = normalizeKey(baseLabel(session));
+		const group = groups.get(key) ?? [session];
+		if (group.length === 1) {
+			return {
+				...session,
+				displayName: baseLabel(session),
+				shortDisplayName: compactLabel(baseLabel(session)),
+			};
+		}
+
+		const suffix = duplicateSuffix(session, group);
+		const label = `${baseLabel(session)} (${suffix})`;
+
+		return {
+			...session,
+			displayName: label,
+			shortDisplayName: compactLabel(baseLabel(session), suffix),
+		};
+	});
+}
+
+function baseLabel(session: MixerSession): string {
+	const label = session.displayName.trim() || session.processName.trim() || "Session";
+	return label.replace(/\.exe$/i, "");
+}
+
+function compactLabel(label: string, suffix?: string): string {
+	if (!suffix) {
+		return label.length <= 8 ? label : label.slice(0, 8);
+	}
+
+	const separator = " ";
+	const available = Math.max(1, 8 - suffix.length - separator.length);
+	return `${label.slice(0, available)}${separator}${suffix}`;
+}
+
+function duplicateSuffix(session: MixerSession, group: MixerSession[]): string {
+	if (session.processId) {
+		return `${session.processId}`.slice(-3);
+	}
+
+	const index = group.findIndex((candidate) => candidate.id === session.id);
+	return `${index + 1}`;
+}
+
+function normalizeKey(value: string): string {
+	return value.trim().toLowerCase();
+}
