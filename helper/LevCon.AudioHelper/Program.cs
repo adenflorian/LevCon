@@ -47,7 +47,7 @@ static object ExecuteCommand(string command, string[] commandArgs)
 {
   return command switch
   {
-    "list" => ListSessions(GetOption(commandArgs, "--visibility") ?? "all"),
+    "list" => ListSessions(),
     "adjust-volume" => AdjustVolume(GetRequiredOption(commandArgs, "--id"), ParseInt(GetRequiredOption(commandArgs, "--delta"))),
     "toggle-mute" => ToggleMute(GetRequiredOption(commandArgs, "--id")),
     _ => throw new InvalidOperationException($"Unknown command '{command}'."),
@@ -223,7 +223,7 @@ static AudioSessionControl? FindSession(string sessionId)
   return null;
 }
 
-static object ListSessions(string visibility)
+static object ListSessions()
 {
   using var device = GetDefaultRenderDevice();
   var sessions = device.AudioSessionManager.Sessions;
@@ -235,10 +235,6 @@ static object ListSessions(string visibility)
     using var session = sessions[index];
 
     var active = session.State == NAudio.CoreAudioApi.Interfaces.AudioSessionState.AudioSessionStateActive;
-    if (visibility == "active" && !active)
-    {
-      continue;
-    }
 
     visibleSessions.Add(new SessionDto(
         GetSessionId(session),
