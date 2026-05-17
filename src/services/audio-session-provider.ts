@@ -4,7 +4,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
-import type { MixerSession, SessionVisibility } from "../types/mixer";
+import type { MixerSession } from "../types/mixer";
 
 const INACTIVE_ICON_DELAY_MS = 5_000;
 const PEAK_ACTIVITY_THRESHOLD = 0.001;
@@ -21,7 +21,6 @@ type HelperMutationResponse = {
 
 type HelperRequest = {
 	command: "list" | "adjust-volume" | "toggle-mute";
-	visibility?: SessionVisibility;
 	id?: string;
 	delta?: number;
 };
@@ -41,29 +40,28 @@ export class AudioSessionProvider {
 	private helperExecutablePath?: string;
 	private readonly lastActiveAtBySessionId = new Map<string, number>();
 	private readonly optimisticStateBySessionId = new Map<string, { volume?: number; muted?: boolean }>();
-	private readonly cachedSessionsByVisibility = new Map<SessionVisibility, MixerSession[]>();
-	private readonly inFlightSessionsByVisibility = new Map<SessionVisibility, Promise<MixerSession[]>>();
+	private cachedSessions?: MixerSession[];
+	private inFlightSessions?: Promise<MixerSession[]>;
 	private helperProcess?: ChildProcessWithoutNullStreams;
 	private helperStdout?: readline.Interface;
 	private helperStderr = "";
 	private helperRequestChain = Promise.resolve();
 	private pendingHelperResponses: PendingHelperResponse[] = [];
 
-	async listSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
-		const cachedSessions = this.cachedSessionsByVisibility.get(visibility);
-		if (cachedSessions) {
-			void this.refreshSessions(visibility);
-			return cachedSessions;
+	async listSessions(): Promise<MixerSession[]> {
+		if (this.cachedSessions) {
+			void this.refreshSessions();
+			return this.cachedSessions;
 		}
 
-		return this.refreshSessions(visibility);
+		return this.refreshSessions();
 	}
 
 	setPriorityMatchers(matchers: string[] | undefined): void {
 		sessionPriorityMatchers = normalizePriorityMatchers(matchers);
 
-		for (const [visibility, sessions] of this.cachedSessionsByVisibility.entries()) {
-			this.cachedSessionsByVisibility.set(visibility, normalizeSessions(sessions));
+		if (this.cachedSessions) {
+			this.cachedSessions = normalizeSessions(this.cachedSessions);
 		}
 	}
 
@@ -123,39 +121,31 @@ export class AudioSessionProvider {
 		return response.ok;
 	}
 
-	private refreshSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
-		const inFlight = this.inFlightSessionsByVisibility.get(visibility);
-		if (inFlight) {
-			return inFlight;
+	private refreshSessions(): Promise<MixerSession[]> {
+		if (this.inFlightSessions) {
+			return this.inFlightSessions;
 		}
 
-		const nextFetch = this.fetchSessions(visibility)
+		const nextFetch = this.fetchSessions()
 			.finally(() => {
-				this.inFlightSessionsByVisibility.delete(visibility);
+				this.inFlightSessions = undefined;
 			});
 
-		this.inFlightSessionsByVisibility.set(visibility, nextFetch);
+		this.inFlightSessions = nextFetch;
 		return nextFetch;
 	}
 
-	private async fetchSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
+	private async fetchSessions(): Promise<MixerSession[]> {
 		const response = await this.runHelper<HelperListResponse>({
 			command: "list",
-			visibility: "all",
 		});
 		const sessions = normalizeSessions(this.decorateRecentActivity(this.applyOptimisticState([response.endpoint, ...response.sessions])));
-		const visibleSessions = visibility === "active"
-			? sessions.filter((session) => session.isOutputVolume || session.recentlyActive)
-			: sessions;
-		this.cachedSessionsByVisibility.set(visibility, visibleSessions);
-		return visibleSessions;
+		this.cachedSessions = sessions;
+		return sessions;
 	}
 
 	private async refreshAllSessionCaches(): Promise<void> {
-		await Promise.all([
-			this.refreshSessions("all"),
-			this.refreshSessions("active"),
-		]);
+		await this.refreshSessions();
 	}
 
 	private async resolveHelperPath(): Promise<string> {
@@ -309,20 +299,22 @@ export class AudioSessionProvider {
 	}
 
 	private updateCachedSession(sessionId: string, updater: (session: MixerSession) => MixerSession): void {
-		for (const [visibility, sessions] of this.cachedSessionsByVisibility.entries()) {
-			let changed = false;
-			const nextSessions = sessions.map((session) => {
-				if (session.id !== sessionId) {
-					return session;
-				}
+		if (!this.cachedSessions) {
+			return;
+		}
 
-				changed = true;
-				return updater(session);
-			});
-
-			if (changed) {
-				this.cachedSessionsByVisibility.set(visibility, nextSessions);
+		let changed = false;
+		const nextSessions = this.cachedSessions.map((session) => {
+			if (session.id !== sessionId) {
+				return session;
 			}
+
+			changed = true;
+			return updater(session);
+		});
+
+		if (changed) {
+			this.cachedSessions = nextSessions;
 		}
 	}
 }

@@ -1,4 +1,4 @@
-import type { MixerSession, MixerViewModel, SessionVisibility } from "../types/mixer";
+import type { MixerSession, MixerViewModel } from "../types/mixer";
 import { audioSessionProvider } from './audio-session-provider';
 
 const DEVICE_REFRESH_INTERVAL_MS = 1500;
@@ -7,7 +7,6 @@ const VOLUME_FLUSH_DELAY_MS = 40;
 type SlotRegistration = {
 	contextId: string;
 	deviceId: string;
-	filter: SessionVisibility;
 	slotIndex: number;
 	refresh: () => Promise<void>;
 };
@@ -50,8 +49,8 @@ class MixerRuntime {
 		this.stopRefreshLoopIfIdle();
 	}
 
-	async adjustSlot(deviceId: string, slotIndex: number, filter: SessionVisibility, delta: number): Promise<MixerSession | undefined> {
-		const view = await this.getView(deviceId, slotIndex, filter);
+	async adjustSlot(deviceId: string, slotIndex: number, delta: number): Promise<MixerSession | undefined> {
+		const view = await this.getView(deviceId, slotIndex);
 		if (!view.session) {
 			return undefined;
 		}
@@ -67,21 +66,15 @@ class MixerRuntime {
 	}
 
 	async getPageSummary(deviceId: string): Promise<{ page: number; totalPages: number; hasPrevious: boolean; hasNext: boolean }> {
-		const filters = Array.from(this.slots.values())
-			.filter((slot) => slot.deviceId === deviceId)
-			.map((slot) => slot.filter);
+		const deviceSlots = Array.from(this.slots.values()).filter((slot) => slot.deviceId === deviceId);
 
-		if (filters.length === 0) {
+		if (deviceSlots.length === 0) {
 			return { page: 0, totalPages: 1, hasPrevious: false, hasNext: false };
 		}
 
-		const totals = await Promise.all(filters.map(async (filter) => {
-			const sessions = await audioSessionProvider.listSessions(filter);
-			const { pinnedOutput, appSessions } = splitMixerSessions(sessions);
-			return computeTotalPages(appSessions.length, this.getSlotCount(deviceId), Boolean(pinnedOutput));
-		}));
-
-		const totalPages = Math.max(1, ...totals);
+		const sessions = await audioSessionProvider.listSessions();
+		const { pinnedOutput, appSessions } = splitMixerSessions(sessions);
+		const totalPages = computeTotalPages(appSessions.length, this.getSlotCount(deviceId), Boolean(pinnedOutput));
 		const page = this.clampPage(deviceId, totalPages);
 
 		return {
@@ -92,8 +85,8 @@ class MixerRuntime {
 		};
 	}
 
-	async getView(deviceId: string, slotIndex: number, filter: SessionVisibility): Promise<MixerViewModel> {
-		const sessions = await audioSessionProvider.listSessions(filter);
+	async getView(deviceId: string, slotIndex: number): Promise<MixerViewModel> {
+		const sessions = await audioSessionProvider.listSessions();
 		const slotCount = this.getSlotCount(deviceId);
 		const { pinnedOutput, appSessions } = splitMixerSessions(sessions);
 		const totalPages = computeTotalPages(appSessions.length, slotCount, Boolean(pinnedOutput));
@@ -123,8 +116,8 @@ class MixerRuntime {
 		await this.refreshDevice(deviceId);
 	}
 
-	async toggleSlotMute(deviceId: string, slotIndex: number, filter: SessionVisibility): Promise<boolean> {
-		const view = await this.getView(deviceId, slotIndex, filter);
+	async toggleSlotMute(deviceId: string, slotIndex: number): Promise<boolean> {
+		const view = await this.getView(deviceId, slotIndex);
 		if (!view.session) {
 			return false;
 		}

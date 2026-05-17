@@ -1,5 +1,3 @@
-export type SessionVisibility = "all" | "active";
-
 export type MixerSession = {
 	id: string;
 	displayName: string;

@@ -6,12 +6,11 @@ import streamDeck, {
 import { audioSessionProvider } from '../services/audio-session-provider';
 import { mixerRuntime } from '../services/mixer-runtime';
 
-import type { MixerGlobalSettings, MixerSession, MixerSlotSettings, SessionVisibility } from "../types/mixer";
+import type { MixerGlobalSettings, MixerSession, MixerSlotSettings } from "../types/mixer";
 
 export const MIXER_SLOT_UUID = "com.david-valachovic.levcon.mixer.slot";
 const DIAL_LAYOUT = "layouts/mixer-slot.json";
 const DEFAULT_STEP_SIZE = 5;
-const DEFAULT_VISIBILITY: SessionVisibility = "all";
 const KEY_CANVAS_SIZE = 144;
 const KEY_ICON_SIZE_PERCENT = 80;
 
@@ -43,7 +42,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	override async onDialRotate(ev: DialRotateEvent<MixerSlotSettings>): Promise<void> {
 		await ensureGlobalSettingsLoaded();
 		const stepSize = globalStepSize;
-		const session = await mixerRuntime.adjustSlot(ev.action.device.id, resolveSlotIndex(ev.action), DEFAULT_VISIBILITY, stepSize * ev.payload.ticks);
+		const session = await mixerRuntime.adjustSlot(ev.action.device.id, resolveSlotIndex(ev.action), stepSize * ev.payload.ticks);
 		if (!session) {
 			await ev.action.showAlert();
 			return;
@@ -53,14 +52,14 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<MixerSlotSettings>): Promise<void> {
-		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action), DEFAULT_VISIBILITY);
+		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action));
 		if (!changed) {
 			await ev.action.showAlert();
 		}
 	}
 
 	override async onTouchTap(ev: TouchTapEvent<MixerSlotSettings>): Promise<void> {
-		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action), DEFAULT_VISIBILITY);
+		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action));
 		if (!changed) {
 			await ev.action.showAlert();
 		}
@@ -80,14 +79,13 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		mixerRuntime.registerSlot({
 			contextId: action.id,
 			deviceId: action.device.id,
-			filter: DEFAULT_VISIBILITY,
 			slotIndex: resolveSlotIndex(action),
 			refresh: () => this.render(action),
 		});
 	}
 
 	private async render(action: MixerSlotActionInstance): Promise<void> {
-		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action), DEFAULT_VISIBILITY);
+		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action));
 		if (!view.session) {
 			if (action.isDial()) {
 				this.dialRenderStateByContext.delete(action.id);
