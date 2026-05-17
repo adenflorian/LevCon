@@ -6,6 +6,7 @@ export type MixerSession = {
 	iconDataUri?: string;
 	processName: string;
 	processId?: number;
+	isOutputVolume?: boolean;
 	sessionIdentifier?: string;
 	sessionInstanceIdentifier?: string;
 	groupingParam?: string;
@@ -22,6 +23,9 @@ export type MixerSession = {
 export type MixerSlotSettings = {
 	showApps?: SessionVisibility;
 	slotIndex?: number;
+};
+
+export type MixerGlobalSettings = {
 	stepSize?: number;
 };
 

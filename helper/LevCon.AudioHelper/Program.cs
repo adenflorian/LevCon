@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using NAudio.CoreAudioApi;
 
+const string EndpointVolumeSessionId = "levcon:default-output-volume";
+
 var options = new JsonSerializerOptions
 {
   PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -41,6 +43,19 @@ catch (Exception exception)
 
 static object AdjustVolume(string sessionId, int delta)
 {
+  if (sessionId == EndpointVolumeSessionId)
+  {
+    using var device = GetDefaultRenderDevice();
+    var endpointTargetVolume = Math.Clamp((int)Math.Round(device.AudioEndpointVolume.MasterVolumeLevelScalar * 100f) + delta, 0, 100);
+    device.AudioEndpointVolume.MasterVolumeLevelScalar = endpointTargetVolume / 100f;
+    if (endpointTargetVolume > 0)
+    {
+      device.AudioEndpointVolume.Mute = false;
+    }
+
+    return new MutationResult(true);
+  }
+
   using var session = FindSession(sessionId);
   if (session is null)
   {
@@ -174,6 +189,7 @@ static object ListSessions(string visibility)
         BuildIconDataUri(session),
         BuildProcessName(session),
         session.GetProcessID,
+      false,
       session.GetSessionIdentifier,
       session.GetSessionInstanceIdentifier,
       session.GetGroupingParam().ToString(),
@@ -185,7 +201,27 @@ static object ListSessions(string visibility)
         active));
   }
 
-  return new SessionListResult(visibleSessions);
+  return new SessionListResult(BuildEndpointVolume(device), visibleSessions);
+}
+
+static SessionDto BuildEndpointVolume(MMDevice device)
+{
+  return new SessionDto(
+    EndpointVolumeSessionId,
+    "Output Volume",
+    null,
+    "System",
+    0,
+    true,
+    device.ID,
+    device.ID,
+    device.ID,
+    device.State.ToString(),
+    device.AudioMeterInformation.MasterPeakValue,
+    false,
+    (int)Math.Round(device.AudioEndpointVolume.MasterVolumeLevelScalar * 100f),
+    device.AudioEndpointVolume.Mute,
+    true);
 }
 
 static int ParseInt(string value)
@@ -212,6 +248,13 @@ static string GetSessionId(AudioSessionControl session)
 
 static object ToggleMute(string sessionId)
 {
+  if (sessionId == EndpointVolumeSessionId)
+  {
+    using var device = GetDefaultRenderDevice();
+    device.AudioEndpointVolume.Mute = !device.AudioEndpointVolume.Mute;
+    return new MutationResult(true);
+  }
+
   using var session = FindSession(sessionId);
   if (session is null)
   {
@@ -259,6 +302,7 @@ record SessionDto(
   string? IconDataUri,
   string ProcessName,
   uint ProcessId,
+  bool IsOutputVolume,
   string? SessionIdentifier,
   string? SessionInstanceIdentifier,
   string GroupingParam,
@@ -270,4 +314,4 @@ record SessionDto(
   bool Active
 );
 
-record SessionListResult(IReadOnlyList<SessionDto> Sessions);
+record SessionListResult(SessionDto Endpoint, IReadOnlyList<SessionDto> Sessions);

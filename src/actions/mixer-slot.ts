@@ -7,12 +7,20 @@ import streamDeck, {
 import { audioSessionProvider } from '../services/audio-session-provider';
 import { mixerRuntime } from '../services/mixer-runtime';
 
-import type { MixerInspectorPreview, MixerInspectorRequest, MixerSlotSettings, SessionVisibility } from "../types/mixer";
+import type { MixerGlobalSettings, MixerInspectorPreview, MixerInspectorRequest, MixerSlotSettings, SessionVisibility } from "../types/mixer";
 
 export const MIXER_SLOT_UUID = "com.david-valachovic.levcon.mixer.slot";
 const DIAL_LAYOUT = "layouts/mixer-slot.json";
+const DEFAULT_STEP_SIZE = 5;
 
 type MixerSlotActionInstance = DialAction<MixerSlotSettings> | KeyAction<MixerSlotSettings>;
+
+let globalStepSize = DEFAULT_STEP_SIZE;
+let globalSettingsLoaded: Promise<void> | undefined;
+
+streamDeck.settings.onDidReceiveGlobalSettings<MixerGlobalSettings>((ev) => {
+	globalStepSize = clampStepSize(ev.settings.stepSize);
+});
 
 @action({ UUID: MIXER_SLOT_UUID })
 export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
@@ -25,7 +33,8 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 
 	override async onDialRotate(ev: DialRotateEvent<MixerSlotSettings>): Promise<void> {
 		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
-		const stepSize = settings.stepSize ?? 5;
+		await ensureGlobalSettingsLoaded();
+		const stepSize = globalStepSize;
 		const changed = await mixerRuntime.adjustSlot(ev.action.device.id, resolveSlotIndex(ev.action, settings), settings.showApps ?? "all", stepSize * ev.payload.ticks);
 		if (!changed) {
 			await ev.action.showAlert();
@@ -57,6 +66,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 
 	override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent<MixerSlotSettings>): Promise<void> {
 		const settings = await this.ensureSettings(ev.action, await ev.action.getSettings<MixerSlotSettings>());
+		await ensureGlobalSettingsLoaded();
 		await this.sendPreview(settings, ev.action.device.id, resolveSlotIndex(ev.action, settings));
 	}
 
@@ -90,14 +100,16 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action, settings), settings.showApps ?? "all");
 		if (!view.session) {
 			if (action.isDial()) {
+				const blankDialAsset = renderTransparentAssetSvg(200, 100);
 				await action.setFeedbackLayout(DIAL_LAYOUT);
 				await action.setFeedback({
-					background: renderDialBackgroundSvg(),
+					background: blankDialAsset,
 					icon: renderDialIconSvg(),
-					level: { value: 0, bar_fill_c: "#3e4b58", bar_bg_c: "#1d252d", bar_border_c: "#1d252d", subtype: BarSubType.Groove },
-					name: "Empty",
-					value: `${view.page + 1}/${view.totalPages}`,
+					level: { value: 0, bar_fill_c: "#00000000", bar_bg_c: "#00000000", bar_border_c: "#00000000", subtype: BarSubType.Groove },
+					name: "",
+					value: "",
 				});
+				await action.setImage(renderDialIconSvg());
 			} else {
 				await action.setImage(renderKeySvg());
 			}
@@ -183,7 +195,11 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	}
 }
 
-function labelForSession(session: { displayName: string; shortDisplayName?: string; isSystemSoundsSession?: boolean }): string {
+function labelForSession(session: { displayName: string; shortDisplayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean }): string {
+	if (session.isOutputVolume) {
+		return "Output";
+	}
+
 	if (isSystemSession(session)) {
 		return "System";
 	}
@@ -193,7 +209,11 @@ function labelForSession(session: { displayName: string; shortDisplayName?: stri
 }
 
 
-function dialLabel(session: { displayName: string; shortDisplayName?: string; isSystemSoundsSession?: boolean }): string {
+function dialLabel(session: { displayName: string; shortDisplayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean }): string {
+	if (session.isOutputVolume) {
+		return "Output Volume";
+	}
+
 	if (isSystemSession(session)) {
 		return "System Sounds";
 	}
@@ -220,6 +240,18 @@ function escapeXml(value: string): string {
 		.replaceAll("'", "&apos;");
 }
 
+function renderMutedOverlaySvg(size: number, x: number, y: number): string {
+	const strokeWidth = Math.max(2, Math.round(size * 0.12));
+
+	return `
+		<g transform="translate(${x} ${y})">
+			<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="#d93a45"/>
+			<path d="M${size * 0.22} ${size * 0.42}h${size * 0.18}l${size * 0.16}-${size * 0.16}v${size * 0.48}l-${size * 0.16}-${size * 0.16}h-${size * 0.18}z" fill="#ffffff"/>
+			<path d="M${size * 0.7} ${size * 0.3}L${size * 0.3} ${size * 0.7}" stroke="#ffffff" stroke-width="${strokeWidth}" stroke-linecap="round"/>
+		</g>
+	`;
+}
+
 function fallbackGlyphSvg(): string {
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
@@ -238,6 +270,24 @@ function systemSoundsGlyphSvg(): string {
 	`)}`;
 }
 
+function outputVolumeGlyphSvg(): string {
+	return `data:image/svg+xml;utf8,${encodeURIComponent(`
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+			<path d="M10 26h11l13-11v34L21 38H10z" fill="#ffffff"/>
+			<path d="M43 18v28" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-width="4" opacity="0.95"/>
+			<path d="M51 24v16" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-width="4" opacity="0.75"/>
+		</svg>
+	`)}`;
+}
+
+function renderTransparentAssetSvg(width: number, height: number): string {
+	return `data:image/svg+xml;utf8,${encodeURIComponent(`
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">
+			<rect width="${width}" height="${height}" fill="#000000" fill-opacity="0"/>
+		</svg>
+	`)}`;
+}
+
 function renderDialBackgroundSvg(): string {
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
@@ -247,51 +297,52 @@ function renderDialBackgroundSvg(): string {
 }
 
 function renderDialIconSvg(
-	session?: { iconDataUri?: string; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; recentlyActive?: boolean },
+	session?: { iconDataUri?: string; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean; recentlyActive?: boolean },
 	muted = false,
 ): string {
 	if (!session) {
-		return `data:image/svg+xml;utf8,${encodeURIComponent(`
-			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-				<rect width="64" height="64" fill="#000000" fill-opacity="0"/>
-			</svg>
-		`)}`;
+		return renderTransparentAssetSvg(64, 64);
 	}
 
-	const icon = session
-		? (isSystemSession({
+	const icon = session.isOutputVolume
+		? outputVolumeGlyphSvg()
+		: (isSystemSession({
 			shortDisplayName: session.shortDisplayName,
 			displayName: session.displayName ?? "Session",
 			isSystemSoundsSession: session.isSystemSoundsSession,
-		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg()))
-		: fallbackGlyphSvg();
+		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg()));
 	const iconOpacity = muted ? (session.recentlyActive === false ? "0.38" : "0.56") : (session.recentlyActive === false ? "0.62" : "1");
 	const filter = session.recentlyActive === false ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
 	const filterAttribute = session.recentlyActive === false ? ' filter="url(#inactive-icon)"' : '';
+	const mutedOverlay = muted ? renderMutedOverlaySvg(20, 38, 38) : '';
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 			${filter}
 			<image href="${icon}" x="6" y="6" width="52" height="52" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet"${filterAttribute} />
+			${mutedOverlay}
 		</svg>
 	`)}`;
 }
 
 function renderKeySvg(
-	session?: { iconDataUri?: string; muted?: boolean; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; recentlyActive?: boolean },
+	session?: { iconDataUri?: string; muted?: boolean; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean; recentlyActive?: boolean },
 	valueText?: string,
 ): string {
 	const label = session ? escapeXml(labelForSession({
 		shortDisplayName: session.shortDisplayName,
 		displayName: session.displayName ?? "Session",
 		isSystemSoundsSession: session.isSystemSoundsSession,
+		isOutputVolume: session.isOutputVolume,
 	})) : "";
 	const icon = session
-		? (isSystemSession({
+		? (session.isOutputVolume
+			? outputVolumeGlyphSvg()
+			: (isSystemSession({
 			shortDisplayName: session.shortDisplayName,
 			displayName: session.displayName ?? "Session",
 			isSystemSoundsSession: session.isSystemSoundsSession,
-		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg()))
+		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg())))
 		: undefined;
 	const muted = session?.muted ?? false;
 	const inactive = session?.recentlyActive === false;
@@ -301,6 +352,7 @@ function renderKeySvg(
 	const image = icon
 		? `<image href="${icon}" x="32" y="22" width="80" height="80" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet"${filterAttribute} />`
 		: "";
+	const mutedOverlay = muted ? renderMutedOverlaySvg(28, 86, 68) : '';
 	const value = valueText ? `<text x="72" y="126" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="15" font-weight="700">${escapeXml(valueText)}</text>` : "";
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
@@ -308,6 +360,7 @@ function renderKeySvg(
 			<rect x="6" y="6" width="132" height="132" rx="18" fill="#0f1318" stroke="#2a3139" stroke-width="2"/>
 			${filter}
 			${image}
+			${mutedOverlay}
 			<text x="72" y="110" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="22" font-weight="700">${label}</text>
 			${value}
 		</svg>
@@ -324,18 +377,35 @@ function resolveSlotIndex(action: MixerSlotActionInstance, settings: MixerSlotSe
 
 function sameSettings(left: MixerSlotSettings, right: MixerSlotSettings): boolean {
 	return left.showApps === right.showApps
-		&& left.slotIndex === right.slotIndex
-		&& left.stepSize === right.stepSize;
+		&& left.slotIndex === right.slotIndex;
 }
 
 function withDefaults(action: MixerSlotActionInstance, settings: MixerSlotSettings): MixerSlotSettings {
 	return {
 		showApps: settings.showApps ?? defaultVisibility(),
 		slotIndex: settings.slotIndex ?? (action.coordinates?.column ?? 0),
-		stepSize: settings.stepSize ?? 5,
 	};
 }
 
 function defaultVisibility(): SessionVisibility {
 	return "active";
+}
+
+async function ensureGlobalSettingsLoaded(): Promise<void> {
+	if (!globalSettingsLoaded) {
+		globalSettingsLoaded = streamDeck.settings.getGlobalSettings<MixerGlobalSettings>()
+			.then((settings) => {
+				globalStepSize = clampStepSize(settings.stepSize);
+			});
+	}
+
+	await globalSettingsLoaded;
+}
+
+function clampStepSize(stepSize: number | undefined): number {
+	if (typeof stepSize !== 'number' || Number.isNaN(stepSize)) {
+		return DEFAULT_STEP_SIZE;
+	}
+
+	return Math.max(1, Math.min(25, Math.round(stepSize)));
 }

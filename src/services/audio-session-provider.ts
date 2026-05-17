@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 const INACTIVE_ICON_DELAY_MS = 5_000;
 
 type HelperListResponse = {
+	endpoint: MixerSession;
 	sessions: MixerSession[];
 };
 
@@ -22,10 +23,28 @@ export class AudioSessionProvider {
 
 	private helperExecutablePath?: string;
 	private readonly lastActiveAtBySessionId = new Map<string, number>();
+	private readonly optimisticStateBySessionId = new Map<string, { volume?: number; muted?: boolean }>();
 
 	async listSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
 		const response = await this.runHelper<HelperListResponse>(["list", "--visibility", visibility]);
-		return normalizeSessions(this.decorateRecentActivity(response.sessions));
+		return normalizeSessions(this.decorateRecentActivity(this.applyOptimisticState([response.endpoint, ...response.sessions])));
+	}
+
+	applyOptimisticVolumeChange(sessionId: string, delta: number): void {
+		const current = this.optimisticStateBySessionId.get(sessionId);
+		const nextVolume = Math.max(0, Math.min(100, (current?.volume ?? 0) + delta));
+		this.optimisticStateBySessionId.set(sessionId, {
+			...current,
+			volume: nextVolume,
+			muted: nextVolume > 0 ? false : current?.muted,
+		});
+	}
+
+	setOptimisticSessionState(session: MixerSession): void {
+		this.optimisticStateBySessionId.set(session.id, {
+			volume: session.volume,
+			muted: session.muted,
+		});
 	}
 
 	async adjustVolume(sessionId: string, delta: number): Promise<boolean> {
@@ -37,6 +56,10 @@ export class AudioSessionProvider {
 			String(delta),
 		]);
 
+		if (!response.ok) {
+			this.optimisticStateBySessionId.delete(sessionId);
+		}
+
 		return response.ok;
 	}
 
@@ -46,6 +69,10 @@ export class AudioSessionProvider {
 			"--id",
 			sessionId,
 		]);
+
+		if (!response.ok) {
+			this.optimisticStateBySessionId.delete(sessionId);
+		}
 
 		return response.ok;
 	}
@@ -113,14 +140,36 @@ export class AudioSessionProvider {
 
 		return nextSessions;
 	}
+
+	private applyOptimisticState(sessions: MixerSession[]): MixerSession[] {
+		return sessions.map((session) => {
+			const optimisticState = this.optimisticStateBySessionId.get(session.id);
+			if (!optimisticState) {
+				return session;
+			}
+
+			if (optimisticState.volume === session.volume && optimisticState.muted === session.muted) {
+				this.optimisticStateBySessionId.delete(session.id);
+				return session;
+			}
+
+			return {
+				...session,
+				volume: optimisticState.volume ?? session.volume,
+				muted: optimisticState.muted ?? session.muted,
+			};
+		});
+	}
 }
 
 export const audioSessionProvider = new AudioSessionProvider();
 
 function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
+	const pinnedOutput = sessions.find((session) => session.isOutputVolume);
+	const appSessions = sessions.filter((session) => !session.isOutputVolume);
 	const groups = new Map<string, MixerSession[]>();
 
-	for (const session of sessions) {
+	for (const session of appSessions) {
 		const key = normalizeKey(baseLabel(session));
 		const group = groups.get(key);
 		if (group) {
@@ -130,7 +179,7 @@ function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
 		}
 	}
 
-	return sessions.map((session) => {
+	const normalizedApps = appSessions.map((session) => {
 		const key = normalizeKey(baseLabel(session));
 		const group = groups.get(key) ?? [session];
 		if (group.length === 1) {
@@ -150,6 +199,17 @@ function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
 			shortDisplayName: compactLabel(baseLabel(session), suffix),
 		};
 	});
+
+	if (!pinnedOutput) {
+		return normalizedApps;
+	}
+
+	return [{
+		...pinnedOutput,
+		displayName: "Output Volume",
+		shortDisplayName: "Output",
+		recentlyActive: true,
+	}, ...normalizedApps];
 }
 
 function baseLabel(session: MixerSession): string {

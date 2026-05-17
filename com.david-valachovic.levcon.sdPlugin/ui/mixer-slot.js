@@ -31,6 +31,7 @@ window.connectElgatoStreamDeckSocket = (
   websocket.addEventListener("open", () => {
     send({ event: inRegisterEvent, uuid: propertyInspectorUuid });
     send({ event: "getSettings", context: actionContext });
+    send({ event: "getGlobalSettings", context: propertyInspectorUuid });
     requestPreview();
   });
 
@@ -38,7 +39,11 @@ window.connectElgatoStreamDeckSocket = (
     const message = JSON.parse(event.data);
     switch (message.event) {
       case "didReceiveSettings":
-        applySettings(message.payload.settings ?? {});
+        applyActionSettings(message.payload.settings ?? {});
+        requestPreview();
+        break;
+      case "didReceiveGlobalSettings":
+        applyGlobalSettings(message.payload.settings ?? {});
         requestPreview();
         break;
       case "sendToPropertyInspector":
@@ -48,18 +53,21 @@ window.connectElgatoStreamDeckSocket = (
   });
 };
 
-bindMirroredInputs(elements.slotIndexRange, elements.slotIndexNumber, 0, 7);
-bindMirroredInputs(elements.stepSizeRange, elements.stepSizeNumber, 1, 25);
+bindMirroredInputs(elements.slotIndexRange, elements.slotIndexNumber, 0, 7, persistActionSettings);
+bindMirroredInputs(elements.stepSizeRange, elements.stepSizeNumber, 1, 25, persistGlobalSettings);
 elements.showApps.addEventListener("change", persistSettings);
 elements.refreshPreview.addEventListener("click", () => requestPreview());
 
-function applySettings(settings) {
+function applyActionSettings(settings) {
   elements.showApps.value = settings.showApps ?? "active";
   setMirroredValue(
     elements.slotIndexRange,
     elements.slotIndexNumber,
     clampNumber(settings.slotIndex, 0, 7, 0),
   );
+}
+
+function applyGlobalSettings(settings) {
   setMirroredValue(
     elements.stepSizeRange,
     elements.stepSizeNumber,
@@ -67,14 +75,14 @@ function applySettings(settings) {
   );
 }
 
-function bindMirroredInputs(rangeInput, numberInput, min, max) {
+function bindMirroredInputs(rangeInput, numberInput, min, max, onChange) {
   rangeInput.addEventListener("input", () => {
     setMirroredValue(
       rangeInput,
       numberInput,
       clampNumber(rangeInput.value, min, max, min),
     );
-    persistSettings();
+    onChange();
   });
 
   numberInput.addEventListener("change", () => {
@@ -83,7 +91,7 @@ function bindMirroredInputs(rangeInput, numberInput, min, max) {
       numberInput,
       clampNumber(numberInput.value, min, max, min),
     );
-    persistSettings();
+    onChange();
   });
 }
 
@@ -96,10 +104,15 @@ function clampNumber(value, min, max, fallback) {
   return Math.min(max, Math.max(min, parsed));
 }
 
-function currentSettings() {
+function currentActionSettings() {
   return {
     showApps: elements.showApps.value,
     slotIndex: clampNumber(elements.slotIndexNumber.value, 0, 7, 0),
+  };
+}
+
+function currentGlobalSettings() {
+  return {
     stepSize: clampNumber(elements.stepSizeNumber.value, 1, 25, 5),
   };
 }
@@ -194,13 +207,24 @@ function formatPeakValue(value) {
   return value.toFixed(4);
 }
 
-function persistSettings() {
-  const settings = currentSettings();
+function persistActionSettings() {
+  const settings = currentActionSettings();
   send({ event: "setSettings", context: actionContext, payload: settings });
+  return settings;
+}
+
+function persistGlobalSettings() {
+  const settings = currentGlobalSettings();
+  send({ event: "setGlobalSettings", context: propertyInspectorUuid, payload: settings });
+  return settings;
+}
+
+function persistSettings() {
+  const settings = persistActionSettings();
   requestPreview(settings);
 }
 
-function requestPreview(settings = currentSettings()) {
+function requestPreview(settings = currentActionSettings()) {
   if (!websocket || websocket.readyState !== WebSocket.OPEN) {
     return;
   }

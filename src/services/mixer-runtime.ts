@@ -46,6 +46,9 @@ class MixerRuntime {
 			return false;
 		}
 
+		audioSessionProvider.setOptimisticSessionState(view.session);
+		audioSessionProvider.applyOptimisticVolumeChange(view.session.id, delta);
+		await this.refreshDevice(deviceId);
 		const updated = await audioSessionProvider.adjustVolume(view.session.id, delta);
 		await this.refreshDevice(deviceId);
 		return updated;
@@ -62,7 +65,8 @@ class MixerRuntime {
 
 		const totals = await Promise.all(filters.map(async (filter) => {
 			const sessions = await audioSessionProvider.listSessions(filter);
-			return computeTotalPages(sessions.length, this.getSlotCount(deviceId));
+			const { pinnedOutput, appSessions } = splitMixerSessions(sessions);
+			return computeTotalPages(appSessions.length, this.getSlotCount(deviceId), Boolean(pinnedOutput));
 		}));
 
 		const totalPages = Math.max(1, ...totals);
@@ -79,14 +83,21 @@ class MixerRuntime {
 	async getView(deviceId: string, slotIndex: number, filter: SessionVisibility): Promise<MixerViewModel> {
 		const sessions = await audioSessionProvider.listSessions(filter);
 		const slotCount = this.getSlotCount(deviceId);
-		const totalPages = computeTotalPages(sessions.length, slotCount);
+		const { pinnedOutput, appSessions } = splitMixerSessions(sessions);
+		const totalPages = computeTotalPages(appSessions.length, slotCount, Boolean(pinnedOutput));
 		const page = this.clampPage(deviceId, totalPages);
-		const sessionIndex = page * slotCount + slotIndex;
+		const session = resolveSlotSession({
+			appSessions,
+			page,
+			pinnedOutput,
+			slotCount,
+			slotIndex,
+		});
 
 		return {
 			page,
 			totalPages,
-			session: sessions[sessionIndex],
+			session,
 			sessionCount: sessions.length,
 			slotCount,
 		};
@@ -106,6 +117,11 @@ class MixerRuntime {
 			return false;
 		}
 
+		audioSessionProvider.setOptimisticSessionState({
+			...view.session,
+			muted: !view.session.muted,
+		});
+		await this.refreshDevice(deviceId);
 		const updated = await audioSessionProvider.toggleMute(view.session.id);
 		await this.refreshDevice(deviceId);
 		return updated;
@@ -175,8 +191,67 @@ function clamp(value: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, value));
 }
 
-function computeTotalPages(sessionCount: number, slotCount: number): number {
-	return Math.max(1, Math.ceil(sessionCount / Math.max(1, slotCount)));
+function computeTotalPages(sessionCount: number, slotCount: number, hasPinnedOutput: boolean): number {
+	const normalizedSlotCount = Math.max(1, slotCount);
+	if (!hasPinnedOutput) {
+		return Math.max(1, Math.ceil(sessionCount / normalizedSlotCount));
+	}
+
+	const firstPageCapacity = Math.max(0, normalizedSlotCount - 1);
+	if (sessionCount <= firstPageCapacity) {
+		return 1;
+	}
+
+	return 1 + Math.ceil((sessionCount - firstPageCapacity) / normalizedSlotCount);
+}
+
+function resolveSlotSession({
+	appSessions,
+	page,
+	pinnedOutput,
+	slotCount,
+	slotIndex,
+}: {
+	appSessions: MixerViewModel["session"][];
+	page: number;
+	pinnedOutput?: MixerViewModel["session"];
+	slotCount: number;
+	slotIndex: number;
+}): MixerViewModel["session"] {
+	if (pinnedOutput && page === 0 && slotIndex === 0) {
+		return pinnedOutput;
+	}
+
+	const normalizedSlotCount = Math.max(1, slotCount);
+	if (!pinnedOutput) {
+		return appSessions[page * normalizedSlotCount + slotIndex];
+	}
+
+	const firstPageCapacity = Math.max(0, normalizedSlotCount - 1);
+	if (page === 0) {
+		const firstPageIndex = slotIndex - 1;
+		if (firstPageIndex < 0) {
+			return undefined;
+		}
+
+		return appSessions[firstPageIndex];
+	}
+
+	if (normalizedSlotCount <= 0) {
+		return undefined;
+	}
+
+	const sessionIndex = firstPageCapacity + ((page - 1) * normalizedSlotCount) + slotIndex;
+	return appSessions[sessionIndex];
+}
+
+function splitMixerSessions(sessions: MixerViewModel["session"][]): {
+	pinnedOutput?: MixerViewModel["session"];
+	appSessions: NonNullable<MixerViewModel["session"]>[];
+} {
+	const pinnedOutput = sessions.find((session) => session?.isOutputVolume);
+	const appSessions = sessions.filter((session): session is NonNullable<MixerViewModel["session"]> => Boolean(session && !session.isOutputVolume));
+	return { pinnedOutput, appSessions };
 }
 
 export const mixerRuntime = new MixerRuntime();
