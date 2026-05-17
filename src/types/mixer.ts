@@ -21,30 +21,11 @@ export type MixerSession = {
 	recentlyActive?: boolean;
 };
 
-export type MixerSlotSettings = {
-	slotIndex?: number;
-};
+export type MixerSlotSettings = Record<string, never>;
 
 export type MixerGlobalSettings = {
 	stepSize?: number;
 	priorityMatchers?: string[];
-};
-
-export type MixerInspectorRequest = {
-	type: "requestPreview";
-	settings?: MixerSlotSettings;
-};
-
-export type MixerInspectorPreview = {
-	type: "preview";
-	currentSessionId?: string;
-	error?: string;
-	filter: SessionVisibility;
-	page: number;
-	sessionCount: number;
-	sessions: MixerSession[];
-	slotIndex: number;
-	totalPages: number;
 };
 
 export type MixerViewModel = {

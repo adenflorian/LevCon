@@ -1,26 +1,32 @@
+/**
+ * @type {WebSocket}
+ */
 let websocket;
+/**
+ * @type {any}
+ */
 let propertyInspectorUuid;
+/**
+ * @type {any}
+ */
 let actionContext;
 let actionUuid;
 
+/**
+ * @type {{ stepSizeNumber: HTMLInputElement; stepSizeRange: HTMLInputElement; priorityMatchers: HTMLTextAreaElement; }}
+ */
 const elements = {
-  previewMeta: document.getElementById("previewMeta"),
-  previewStatus: document.getElementById("previewStatus"),
-  refreshPreview: document.getElementById("refreshPreview"),
-  sessionPreview: document.getElementById("sessionPreview"),
-  slotIndexNumber: document.getElementById("slotIndexNumber"),
-  slotIndexRange: document.getElementById("slotIndexRange"),
   stepSizeNumber: document.getElementById("stepSizeNumber"),
   stepSizeRange: document.getElementById("stepSizeRange"),
   priorityMatchers: document.getElementById("priorityMatchers"),
 };
 
 window.connectElgatoStreamDeckSocket = (
-  inPort,
-  inUUID,
-  inRegisterEvent,
-  inInfo,
-  inActionInfo,
+  /** @type {any} */ inPort,
+  /** @type {any} */ inUUID,
+  /** @type {any} */ inRegisterEvent,
+  /** @type {any} */ inInfo,
+  /** @type {string} */ inActionInfo,
 ) => {
   propertyInspectorUuid = inUUID;
   const actionInfo = JSON.parse(inActionInfo);
@@ -33,7 +39,6 @@ window.connectElgatoStreamDeckSocket = (
     send({ event: inRegisterEvent, uuid: propertyInspectorUuid });
     send({ event: "getSettings", context: actionContext });
     send({ event: "getGlobalSettings", context: propertyInspectorUuid });
-    requestPreview();
   });
 
   websocket.addEventListener("message", (event) => {
@@ -41,26 +46,14 @@ window.connectElgatoStreamDeckSocket = (
     switch (message.event) {
       case "didReceiveSettings":
         applyActionSettings(message.payload.settings ?? {});
-        requestPreview();
         break;
       case "didReceiveGlobalSettings":
         applyGlobalSettings(message.payload.settings ?? {});
-        requestPreview();
-        break;
-      case "sendToPropertyInspector":
-        handlePluginMessage(message.payload);
         break;
     }
   });
 };
 
-bindMirroredInputs(
-  elements.slotIndexRange,
-  elements.slotIndexNumber,
-  0,
-  7,
-  persistActionSettings,
-);
 bindMirroredInputs(
   elements.stepSizeRange,
   elements.stepSizeNumber,
@@ -70,18 +63,13 @@ bindMirroredInputs(
 );
 elements.priorityMatchers.addEventListener("input", () => {
   persistGlobalSettings();
-  requestPreview();
 });
-elements.refreshPreview.addEventListener("click", () => requestPreview());
 
-function applyActionSettings(settings) {
-  setMirroredValue(
-    elements.slotIndexRange,
-    elements.slotIndexNumber,
-    clampNumber(settings.slotIndex, 0, 7, 0),
-  );
-}
+function applyActionSettings(settings) {}
 
+/**
+ * @param {{ stepSize: any; priorityMatchers: any[]; }} settings
+ */
 function applyGlobalSettings(settings) {
   setMirroredValue(
     elements.stepSizeRange,
@@ -93,6 +81,13 @@ function applyGlobalSettings(settings) {
     : "";
 }
 
+/**
+ * @param {HTMLInputElement} rangeInput
+ * @param {HTMLInputElement} numberInput
+ * @param {number} min
+ * @param {number} max
+ * @param {() => void} onChange
+ */
 function bindMirroredInputs(rangeInput, numberInput, min, max, onChange) {
   rangeInput.addEventListener("input", () => {
     setMirroredValue(
@@ -113,6 +108,12 @@ function bindMirroredInputs(rangeInput, numberInput, min, max, onChange) {
   });
 }
 
+/**
+ * @param {any} value
+ * @param {number} min
+ * @param {number} max
+ * @param {number} fallback
+ */
 function clampNumber(value, min, max, fallback) {
   const parsed = Number.parseInt(`${value}`, 10);
   if (Number.isNaN(parsed)) {
@@ -123,9 +124,7 @@ function clampNumber(value, min, max, fallback) {
 }
 
 function currentActionSettings() {
-  return {
-    slotIndex: clampNumber(elements.slotIndexNumber.value, 0, 7, 0),
-  };
+  return {};
 }
 
 function currentGlobalSettings() {
@@ -135,101 +134,14 @@ function currentGlobalSettings() {
   };
 }
 
+/**
+ * @param {any} value
+ */
 function parsePriorityMatchers(value) {
   return `${value}`
     .split(/\r?\n/u)
     .map((entry) => entry.trim())
     .filter(Boolean);
-}
-
-function handlePluginMessage(payload) {
-  if (!payload || payload.type !== "preview") {
-    return;
-  }
-
-  elements.previewStatus.textContent = payload.error ?? "";
-  elements.previewMeta.textContent = `Slot ${payload.slotIndex + 1} • Page ${payload.page + 1}/${payload.totalPages} • ${payload.sessionCount} session${payload.sessionCount === 1 ? "" : "s"}`;
-  elements.sessionPreview.replaceChildren();
-
-  if (payload.sessions.length === 0) {
-    const empty = document.createElement("li");
-    empty.textContent = payload.error
-      ? "Preview unavailable."
-      : "No sessions match this filter.";
-    elements.sessionPreview.append(empty);
-    return;
-  }
-
-  for (const session of payload.sessions) {
-    const item = document.createElement("li");
-    if (session.id === payload.currentSessionId) {
-      item.classList.add("current");
-    }
-
-    const name = document.createElement("div");
-    name.className = "session-name";
-    name.textContent = session.displayName;
-
-    const meta = document.createElement("div");
-    meta.className = "session-meta";
-    meta.textContent = `${session.processName || "unknown"} • pid ${session.processId ?? "n/a"} • ${session.volume}%${session.muted ? " • muted" : ""}${session.active ? " • active" : ""}${session.recentlyActive === false ? " • dimmed" : ""}`;
-
-    const details = document.createElement("div");
-    details.className = "session-details";
-    appendDetail(details, "ID", session.id);
-    appendDetail(details, "Session ID", session.sessionIdentifier);
-    appendDetail(details, "Instance ID", session.sessionInstanceIdentifier);
-    appendDetail(details, "Grouping", session.groupingParam);
-    appendDetail(details, "State", session.state);
-    appendDetail(details, "Peak", formatPeakValue(session.peakValue));
-    appendDetail(
-      details,
-      "System Session",
-      formatBoolean(session.isSystemSoundsSession),
-    );
-    appendDetail(
-      details,
-      "Recent Activity",
-      formatBoolean(session.recentlyActive),
-    );
-
-    item.append(name, meta, details);
-    elements.sessionPreview.append(item);
-  }
-}
-
-function appendDetail(container, label, value) {
-  if (value === undefined || value === null || value === "") {
-    return;
-  }
-
-  const row = document.createElement("div");
-
-  const detailLabel = document.createElement("span");
-  detailLabel.className = "session-detail-label";
-  detailLabel.textContent = `${label}:`;
-
-  const detailValue = document.createElement("span");
-  detailValue.textContent = `${value}`;
-
-  row.append(detailLabel, detailValue);
-  container.append(row);
-}
-
-function formatBoolean(value) {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return value ? "yes" : "no";
-}
-
-function formatPeakValue(value) {
-  if (typeof value !== "number") {
-    return undefined;
-  }
-
-  return value.toFixed(4);
 }
 
 function persistActionSettings() {
@@ -249,27 +161,12 @@ function persistGlobalSettings() {
 }
 
 function persistSettings() {
-  const settings = persistActionSettings();
-  requestPreview(settings);
+  return persistActionSettings();
 }
 
-function requestPreview(settings = currentActionSettings()) {
-  if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
-  elements.previewStatus.textContent = "Loading preview...";
-  send({
-    event: "sendToPlugin",
-    action: actionUuid,
-    context: actionContext,
-    payload: {
-      type: "requestPreview",
-      settings,
-    },
-  });
-}
-
+/**
+ * @param {{ event: any; uuid?: any; context?: any; payload?: {  } | { stepSize: any; priorityMatchers: string[]; }; }} payload
+ */
 function send(payload) {
   if (!websocket || websocket.readyState !== WebSocket.OPEN) {
     return;
@@ -278,6 +175,11 @@ function send(payload) {
   websocket.send(JSON.stringify(payload));
 }
 
+/**
+ * @param {HTMLInputElement} rangeInput
+ * @param {HTMLInputElement} numberInput
+ * @param {any} value
+ */
 function setMirroredValue(rangeInput, numberInput, value) {
   rangeInput.value = `${value}`;
   numberInput.value = `${value}`;

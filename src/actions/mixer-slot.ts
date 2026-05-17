@@ -1,13 +1,12 @@
 import streamDeck, {
 	action, BarSubType, DialAction, DialRotateEvent, DidReceiveSettingsEvent, FeedbackPayload,
-	KeyAction, KeyDownEvent, PropertyInspectorDidAppearEvent, SendToPluginEvent, SingletonAction,
-	TouchTapEvent, WillAppearEvent, WillDisappearEvent
+	KeyAction, KeyDownEvent, SingletonAction, TouchTapEvent, WillAppearEvent, WillDisappearEvent
 } from '@elgato/streamdeck';
 
 import { audioSessionProvider } from '../services/audio-session-provider';
 import { mixerRuntime } from '../services/mixer-runtime';
 
-import type { MixerGlobalSettings, MixerInspectorPreview, MixerInspectorRequest, MixerSlotSettings, SessionVisibility } from "../types/mixer";
+import type { MixerGlobalSettings, MixerSession, MixerSlotSettings, SessionVisibility } from "../types/mixer";
 
 export const MIXER_SLOT_UUID = "com.david-valachovic.levcon.mixer.slot";
 const DIAL_LAYOUT = "layouts/mixer-slot.json";
@@ -37,17 +36,14 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	private readonly dialRenderStateByContext = new Map<string, DialRenderState>();
 
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<MixerSlotSettings>): Promise<void> {
-		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
-		this.registerAction(ev.action, settings);
-		await this.render(ev.action, settings);
-		await this.sendPreview(settings, ev.action.device.id, resolveSlotIndex(ev.action, settings));
+		this.registerAction(ev.action);
+		await this.render(ev.action);
 	}
 
 	override async onDialRotate(ev: DialRotateEvent<MixerSlotSettings>): Promise<void> {
-		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
 		await ensureGlobalSettingsLoaded();
 		const stepSize = globalStepSize;
-		const session = await mixerRuntime.adjustSlot(ev.action.device.id, resolveSlotIndex(ev.action, settings), DEFAULT_VISIBILITY, stepSize * ev.payload.ticks);
+		const session = await mixerRuntime.adjustSlot(ev.action.device.id, resolveSlotIndex(ev.action), DEFAULT_VISIBILITY, stepSize * ev.payload.ticks);
 		if (!session) {
 			await ev.action.showAlert();
 			return;
@@ -57,44 +53,22 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<MixerSlotSettings>): Promise<void> {
-		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
-		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action, settings), DEFAULT_VISIBILITY);
+		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action), DEFAULT_VISIBILITY);
 		if (!changed) {
 			await ev.action.showAlert();
 		}
 	}
 
 	override async onTouchTap(ev: TouchTapEvent<MixerSlotSettings>): Promise<void> {
-		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
-		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action, settings), DEFAULT_VISIBILITY);
+		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action), DEFAULT_VISIBILITY);
 		if (!changed) {
 			await ev.action.showAlert();
 		}
 	}
 
 	override async onWillAppear(ev: WillAppearEvent<MixerSlotSettings>): Promise<void> {
-		const settings = await this.ensureSettings(ev.action, ev.payload.settings);
-		this.registerAction(ev.action, settings);
-		await this.render(ev.action, settings);
-		await this.sendPreview(settings, ev.action.device.id, resolveSlotIndex(ev.action, settings));
-	}
-
-	override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent<MixerSlotSettings>): Promise<void> {
-		const settings = await this.ensureSettings(ev.action, await ev.action.getSettings<MixerSlotSettings>());
-		await ensureGlobalSettingsLoaded();
-		await this.sendPreview(settings, ev.action.device.id, resolveSlotIndex(ev.action, settings));
-	}
-
-	override async onSendToPlugin(ev: SendToPluginEvent<MixerInspectorRequest, MixerSlotSettings>): Promise<void> {
-		if (ev.payload.type !== "requestPreview") {
-			return;
-		}
-
-		const settings = await this.ensureSettings(
-			ev.action,
-			ev.payload.settings ?? await ev.action.getSettings<MixerSlotSettings>(),
-		);
-		await this.sendPreview(settings, ev.action.device.id, resolveSlotIndex(ev.action, settings));
+		this.registerAction(ev.action);
+		await this.render(ev.action);
 	}
 
 	override onWillDisappear(ev: WillDisappearEvent<MixerSlotSettings>): void {
@@ -102,18 +76,18 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		mixerRuntime.unregister(ev.action.id);
 	}
 
-	private registerAction(action: MixerSlotActionInstance, settings: MixerSlotSettings): void {
+	private registerAction(action: MixerSlotActionInstance): void {
 		mixerRuntime.registerSlot({
 			contextId: action.id,
 			deviceId: action.device.id,
 			filter: DEFAULT_VISIBILITY,
-			slotIndex: resolveSlotIndex(action, settings),
-			refresh: () => this.render(action, settings),
+			slotIndex: resolveSlotIndex(action),
+			refresh: () => this.render(action),
 		});
 	}
 
-	private async render(action: MixerSlotActionInstance, settings: MixerSlotSettings): Promise<void> {
-		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action, settings), DEFAULT_VISIBILITY);
+	private async render(action: MixerSlotActionInstance): Promise<void> {
+		const view = await mixerRuntime.getView(action.device.id, resolveSlotIndex(action), DEFAULT_VISIBILITY);
 		if (!view.session) {
 			if (action.isDial()) {
 				this.dialRenderStateByContext.delete(action.id);
@@ -150,7 +124,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		}
 	}
 
-	private async renderDialSession(action: DialAction<MixerSlotSettings>, session: MixerInspectorPreview["sessions"][number]): Promise<void> {
+	private async renderDialSession(action: DialAction<MixerSlotSettings>, session: MixerSession): Promise<void> {
 		const muteLabel = session.muted ? "M" : `${session.volume}%`;
 		const iconStateKey = dialIconStateKey(session, session.muted);
 		const name = dialLabel(session);
@@ -190,56 +164,6 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 			name,
 			layoutApplied: true,
 		});
-	}
-
-	private async ensureSettings(action: MixerSlotActionInstance, settings: MixerSlotSettings): Promise<MixerSlotSettings> {
-		const storedSettings = await action.getSettings<MixerSlotSettings>();
-		const mergedSettings = {
-			...storedSettings,
-			...settings,
-		};
-		const nextSettings = withDefaults(action, mergedSettings);
-		if (!sameSettings(storedSettings, nextSettings)) {
-			await action.setSettings(nextSettings);
-		}
-
-		return nextSettings;
-	}
-
-	private async sendPreview(settings: MixerSlotSettings, deviceId: string, slotIndex: number): Promise<void> {
-		try {
-			const filter = DEFAULT_VISIBILITY;
-			const [sessions, view] = await Promise.all([
-				audioSessionProvider.listSessions(filter),
-				mixerRuntime.getView(deviceId, slotIndex, filter),
-			]);
-
-			const payload: MixerInspectorPreview = {
-				type: "preview",
-				currentSessionId: view.session?.id,
-				filter,
-				page: view.page,
-				sessionCount: sessions.length,
-				sessions,
-				slotIndex,
-				totalPages: view.totalPages,
-			};
-
-			await streamDeck.ui.sendToPropertyInspector(payload);
-		} catch (error) {
-			const payload: MixerInspectorPreview = {
-				type: "preview",
-				error: error instanceof Error ? error.message : "Unknown audio preview error.",
-				filter: DEFAULT_VISIBILITY,
-				page: 0,
-				sessionCount: 0,
-				sessions: [],
-				slotIndex,
-				totalPages: 1,
-			};
-
-			await streamDeck.ui.sendToPropertyInspector(payload);
-		}
 	}
 }
 
@@ -478,22 +402,8 @@ function centeredCanvasOffset(size: number): number {
 	return (KEY_CANVAS_SIZE - size) / 2;
 }
 
-function resolveSlotIndex(action: MixerSlotActionInstance, settings: MixerSlotSettings): number {
-	if (typeof settings.slotIndex === "number") {
-		return Math.max(0, Math.floor(settings.slotIndex));
-	}
-
+function resolveSlotIndex(action: MixerSlotActionInstance): number {
 	return action.coordinates?.column ?? 0;
-}
-
-function sameSettings(left: MixerSlotSettings, right: MixerSlotSettings): boolean {
-	return left.slotIndex === right.slotIndex;
-}
-
-function withDefaults(action: MixerSlotActionInstance, settings: MixerSlotSettings): MixerSlotSettings {
-	return {
-		slotIndex: settings.slotIndex ?? (action.coordinates?.column ?? 0),
-	};
 }
 
 async function ensureGlobalSettingsLoaded(): Promise<void> {
