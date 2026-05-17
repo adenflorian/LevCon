@@ -1,7 +1,8 @@
 import streamDeck, {
-	action, BarSubType, DialAction, DialRotateEvent, DidReceiveSettingsEvent, type FeedbackPayload, KeyAction,
-	KeyDownEvent, PropertyInspectorDidAppearEvent, SendToPluginEvent, SingletonAction,
-	TouchTapEvent, WillAppearEvent, WillDisappearEvent
+    action, BarSubType, DialAction, DialRotateEvent, DidReceiveSettingsEvent, FeedbackPayload,
+    KeyAction, KeyDownEvent, PropertyInspectorDidAppearEvent, SendToPluginEvent, SingletonAction,
+    TouchTapEvent,
+    WillAppearEvent, WillDisappearEvent
 } from '@elgato/streamdeck';
 
 import { audioSessionProvider } from '../services/audio-session-provider';

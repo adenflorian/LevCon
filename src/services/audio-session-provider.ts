@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
