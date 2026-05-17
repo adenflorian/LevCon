@@ -1,0 +1,76 @@
+{
+	"Name": "LevCon",
+	"Version": "0.1.0.0",
+	"Author": "David Valachovic",
+	"Actions": [
+		{
+			"Name": "Mixer Slot",
+			"UUID": "com.david-valachovic.levcon.mixer.slot",
+			"Icon": "imgs/actions/counter/icon",
+			"Tooltip": "Displays a paged application volume slot.",
+			"PropertyInspectorPath": "ui/mixer-slot.html",
+			"Controllers": [
+				"Keypad",
+				"Encoder"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/counter/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Page Left",
+			"UUID": "com.david-valachovic.levcon.mixer.previous",
+			"Icon": "imgs/actions/counter/icon",
+			"Tooltip": "Shows the previous page of app volume slots.",
+			"PropertyInspectorPath": "ui/mixer-page.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/counter/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Page Right",
+			"UUID": "com.david-valachovic.levcon.mixer.next",
+			"Icon": "imgs/actions/counter/icon",
+			"Tooltip": "Shows the next page of app volume slots.",
+			"PropertyInspectorPath": "ui/mixer-page.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/counter/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		}
+	],
+	"Category": "LevCon",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "Windows Audio Levels Controller",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "7.1"
+	},
+	"OS": [
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "24",
+		"Debug": "enabled"
+	},
+	"UUID": "com.david-valachovic.levcon"
+}
