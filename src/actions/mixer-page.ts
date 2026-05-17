@@ -1,9 +1,9 @@
 import {
-    action, KeyAction, KeyDownEvent, SingletonAction,
-    WillAppearEvent, WillDisappearEvent
+	action, KeyAction, KeyDownEvent, SingletonAction, WillAppearEvent, WillDisappearEvent
 } from '@elgato/streamdeck';
 
 import { mixerRuntime } from '../services/mixer-runtime';
+import { renderPagerAction } from './ui-theme';
 
 type PagerSettings = Record<string, never>;
 
@@ -41,7 +41,7 @@ export class MixerPreviousPageAction extends SingletonAction<PagerSettings> {
 
 	private async render(action: PagerActionInstance, label: string): Promise<void> {
 		const summary = await mixerRuntime.getPageSummary(action.device.id);
-		await action.setTitle(`${label}\n${summary.page + 1}/${summary.totalPages}`);
+		await renderPagerAction(action, 'left', summary.page + 1, summary.totalPages);
 	}
 }
 
@@ -74,6 +74,6 @@ export class MixerNextPageAction extends SingletonAction<PagerSettings> {
 
 	private async render(action: PagerActionInstance, label: string): Promise<void> {
 		const summary = await mixerRuntime.getPageSummary(action.device.id);
-		await action.setTitle(`${label}\n${summary.page + 1}/${summary.totalPages}`);
+		await renderPagerAction(action, 'right', summary.page + 1, summary.totalPages);
 	}
 }

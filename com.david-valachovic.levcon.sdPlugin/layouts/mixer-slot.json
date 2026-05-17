@@ -1,0 +1,83 @@
+{
+  "id": "com.david-valachovic.levcon.layouts.mixer-slot",
+  "items": [
+    {
+      "key": "background",
+      "rect": [
+        0,
+        0,
+        200,
+        100
+      ],
+      "type": "pixmap",
+      "zOrder": 0
+    },
+    {
+      "key": "name",
+      "type": "text",
+      "rect": [
+        10,
+        6,
+        140,
+        20
+      ],
+      "font": {
+        "size": 14,
+        "weight": 700
+      },
+      "color": "#f2f6fb",
+      "alignment": "left",
+      "text-overflow": "ellipsis",
+      "zOrder": 1
+    },
+    {
+      "key": "icon",
+      "type": "pixmap",
+      "rect": [
+        8,
+        20,
+        56,
+        56
+      ],
+      "zOrder": 2
+    },
+    {
+      "key": "value",
+      "type": "text",
+      "rect": [
+        146,
+        28,
+        44,
+        28
+      ],
+      "font": {
+        "size": 20,
+        "weight": 700
+      },
+      "color": "#f8fbff",
+      "alignment": "right",
+      "zOrder": 3
+    },
+    {
+      "key": "level",
+      "type": "bar",
+      "rect": [
+        66,
+        62,
+        120,
+        12
+      ],
+      "range": {
+        "min": 0,
+        "max": 100
+      },
+      "subtype": 4,
+      "bar_bg_c": "#242d36",
+      "bar_fill_c": "#ffffff",
+      "bar_border_c": "#242d36",
+      "border_w": 1,
+      "value": 0,
+      "zOrder": 4
+    }
+  ]
+}
