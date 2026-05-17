@@ -228,7 +228,6 @@ static object ListSessions()
   using var device = GetDefaultRenderDevice();
   var sessions = device.AudioSessionManager.Sessions;
   var visibleSessions = new List<SessionDto>();
-  var processCommandLineById = new Dictionary<uint, string?>();
 
   for (var index = 0; index < sessions.Count; index += 1)
   {
@@ -242,7 +241,7 @@ static object ListSessions()
         BuildIconDataUri(session),
         BuildProcessName(session),
         session.GetProcessID,
-        GetCachedProcessCommandLine(session.GetProcessID, processCommandLineById),
+        GetCachedProcessCommandLine(session.GetProcessID),
       false,
       session.GetSessionIdentifier,
       session.GetSessionInstanceIdentifier,
@@ -349,17 +348,17 @@ static string? TryGetProcessPath(uint processId)
   }
 }
 
-static string? GetCachedProcessCommandLine(uint processId, IDictionary<uint, string?> cache)
+static string? GetCachedProcessCommandLine(uint processId)
 {
   if (processId == 0)
   {
     return null;
   }
 
-  if (!cache.TryGetValue(processId, out var commandLine))
+  if (!HelperCache.ProcessCommandLineById.TryGetValue(processId, out var commandLine))
   {
     commandLine = TryGetProcessCommandLine(processId);
-    cache[processId] = commandLine;
+    HelperCache.ProcessCommandLineById[processId] = commandLine;
   }
 
   return commandLine;
@@ -420,3 +419,8 @@ record SessionDto(
 );
 
 record SessionListResult(SessionDto Endpoint, IReadOnlyList<SessionDto> Sessions);
+
+static class HelperCache
+{
+  public static readonly Dictionary<uint, string?> ProcessCommandLineById = [];
+}
