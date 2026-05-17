@@ -1,6 +1,8 @@
 import type { MixerViewModel, SessionVisibility } from "../types/mixer";
 import { audioSessionProvider } from './audio-session-provider';
 
+const DEVICE_REFRESH_INTERVAL_MS = 1500;
+
 type SlotRegistration = {
 	contextId: string;
 	deviceId: string;
@@ -19,18 +21,23 @@ class MixerRuntime {
 	private readonly pageByDevice = new Map<string, number>();
 	private readonly pagers = new Map<string, PagerRegistration>();
 	private readonly slots = new Map<string, SlotRegistration>();
+	private refreshTimer?: ReturnType<typeof setInterval>;
+	private refreshLoopActive = false;
 
 	registerPager(registration: PagerRegistration): void {
 		this.pagers.set(registration.contextId, registration);
+		this.ensureRefreshLoop();
 	}
 
 	registerSlot(registration: SlotRegistration): void {
 		this.slots.set(registration.contextId, registration);
+		this.ensureRefreshLoop();
 	}
 
 	unregister(contextId: string): void {
 		this.pagers.delete(contextId);
 		this.slots.delete(contextId);
+		this.stopRefreshLoopIfIdle();
 	}
 
 	async adjustSlot(deviceId: string, slotIndex: number, filter: SessionVisibility, delta: number): Promise<boolean> {
@@ -117,6 +124,43 @@ class MixerRuntime {
 		}
 
 		return Math.max(...deviceSlots.map((slot) => slot.slotIndex)) + 1;
+	}
+
+	private ensureRefreshLoop(): void {
+		if (this.refreshTimer) {
+			return;
+		}
+
+		this.refreshTimer = setInterval(() => {
+			void this.refreshAllDevices();
+		}, DEVICE_REFRESH_INTERVAL_MS);
+	}
+
+	private stopRefreshLoopIfIdle(): void {
+		if (this.refreshTimer && this.pagers.size === 0 && this.slots.size === 0) {
+			clearInterval(this.refreshTimer);
+			this.refreshTimer = undefined;
+		}
+	}
+
+	private async refreshAllDevices(): Promise<void> {
+		if (this.refreshLoopActive) {
+			return;
+		}
+
+		this.refreshLoopActive = true;
+		try {
+			const deviceIds = new Set<string>([
+				...Array.from(this.pagers.values()).map((pager) => pager.deviceId),
+				...Array.from(this.slots.values()).map((slot) => slot.deviceId),
+			]);
+
+			for (const deviceId of deviceIds) {
+				await this.refreshDevice(deviceId);
+			}
+		} finally {
+			this.refreshLoopActive = false;
+		}
 	}
 
 	private async refreshDevice(deviceId: string): Promise<void> {
