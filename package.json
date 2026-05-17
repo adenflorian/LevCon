@@ -4,7 +4,7 @@
         "icons": "node scripts/generate-plugin-icons.ts",
         "build": "npm run build:helper && rollup -c",
         "build:helper": "dotnet publish helper/LevCon.AudioHelper/LevCon.AudioHelper.csproj -c Release -r win-x64 --self-contained false -o com.david-valachovic.levcon.sdPlugin/bin/audio-helper",
-        "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.david-valachovic.levcon\""
+        "watch": "npm run build:helper && rollup -c -w --watch.onEnd=\"streamdeck restart com.david-valachovic.levcon\""
     },
     "devDependencies": {
         "@elgato/cli": "^1.7.4",
