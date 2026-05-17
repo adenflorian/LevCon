@@ -1,10 +1,8 @@
 import {
-    action, DialAction, DialRotateEvent, DidReceiveSettingsEvent, KeyAction, KeyDownEvent,
-    SingletonAction, TouchTapEvent,
-    WillAppearEvent, WillDisappearEvent
+  action, DialAction, DialRotateEvent, DidReceiveSettingsEvent, KeyAction, KeyDownEvent,
+  SingletonAction, TouchTapEvent, WillAppearEvent, WillDisappearEvent
 } from '@elgato/streamdeck';
 
-import { audioSessionProvider } from '../services/audio-session-provider';
 import { mixerRuntime } from '../services/mixer-runtime';
 
 import type { MixerSlotSettings, SessionVisibility } from "../types/mixer";
@@ -120,5 +118,5 @@ function withDefaults(action: MixerSlotActionInstance, settings: MixerSlotSettin
 }
 
 function defaultVisibility(): SessionVisibility {
-	return audioSessionProvider.mode === "stub" ? "all" : "active";
+	return "active";
 }

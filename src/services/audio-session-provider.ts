@@ -1,58 +1,89 @@
+import { execFile } from 'node:child_process';
+import { access } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
 import type { MixerSession, SessionVisibility } from "../types/mixer";
 
-const seedSessions: MixerSession[] = [
-	{ id: "discord-voice", displayName: "Discord", processName: "discord.exe", volume: 42, muted: false, active: true },
-	{ id: "discord-notify", displayName: "Discord", processName: "discord.exe", volume: 18, muted: false, active: true },
-	{ id: "spotify-main", displayName: "Spotify", processName: "spotify.exe", volume: 67, muted: false, active: true },
-	{ id: "chrome-youtube", displayName: "Chrome", processName: "chrome.exe", volume: 55, muted: false, active: true },
-	{ id: "obs-monitor", displayName: "OBS", processName: "obs64.exe", volume: 73, muted: false, active: true },
-	{ id: "slack-huddle", displayName: "Slack", processName: "slack.exe", volume: 39, muted: true, active: true },
-	{ id: "teams-call", displayName: "Teams", processName: "ms-teams.exe", volume: 61, muted: false, active: false },
-	{ id: "vlc-player", displayName: "VLC", processName: "vlc.exe", volume: 84, muted: false, active: false },
-	{ id: "game-audio", displayName: "Game", processName: "game.exe", volume: 90, muted: false, active: true },
-	{ id: "browser-meet", displayName: "Edge", processName: "msedge.exe", volume: 48, muted: false, active: true },
-];
+const execFileAsync = promisify(execFile);
+
+type HelperListResponse = {
+	sessions: MixerSession[];
+};
+
+type HelperMutationResponse = {
+	ok: boolean;
+};
 
 export class AudioSessionProvider {
-	readonly mode = "stub";
+	readonly mode = "helper";
 
-	private sessions = seedSessions.map((session) => ({ ...session }));
+	private helperExecutablePath?: string;
 
 	async listSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
-		const sessions = visibility === "active"
-			? this.sessions.filter((session) => session.active)
-			: this.sessions;
-
-		return sessions.map((session) => ({ ...session }));
+		const response = await this.runHelper<HelperListResponse>(["list", "--visibility", visibility]);
+		return response.sessions;
 	}
 
 	async adjustVolume(sessionId: string, delta: number): Promise<boolean> {
-		const session = this.sessions.find((candidate) => candidate.id === sessionId);
-		if (!session) {
-			return false;
-		}
+		const response = await this.runHelper<HelperMutationResponse>([
+			"adjust-volume",
+			"--id",
+			sessionId,
+			"--delta",
+			String(delta),
+		]);
 
-		session.volume = clamp(session.volume + delta, 0, 100);
-		if (session.volume > 0) {
-			session.muted = false;
-		}
-
-		return true;
+		return response.ok;
 	}
 
 	async toggleMute(sessionId: string): Promise<boolean> {
-		const session = this.sessions.find((candidate) => candidate.id === sessionId);
-		if (!session) {
-			return false;
+		const response = await this.runHelper<HelperMutationResponse>([
+			"toggle-mute",
+			"--id",
+			sessionId,
+		]);
+
+		return response.ok;
+	}
+
+	private async resolveHelperPath(): Promise<string> {
+		if (this.helperExecutablePath) {
+			return this.helperExecutablePath;
 		}
 
-		session.muted = !session.muted;
-		return true;
-	}
-}
+		const candidates = [
+			path.resolve(process.cwd(), "com.david-valachovic.levcon.sdPlugin", "bin", "audio-helper", "LevCon.AudioHelper.exe"),
+			path.resolve(process.cwd(), "bin", "audio-helper", "LevCon.AudioHelper.exe"),
+			path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../com.david-valachovic.levcon.sdPlugin/bin/audio-helper/LevCon.AudioHelper.exe"),
+		];
 
-function clamp(value: number, min: number, max: number): number {
-	return Math.min(max, Math.max(min, value));
+		for (const candidate of candidates) {
+			try {
+				await access(candidate);
+				this.helperExecutablePath = candidate;
+				return candidate;
+			} catch {
+				// Try the next candidate.
+			}
+		}
+
+		throw new Error(`LevCon audio helper executable not found. Expected one of: ${candidates.join(", ")}`);
+	}
+
+	private async runHelper<T>(arguments_: string[]): Promise<T> {
+		const helperPath = await this.resolveHelperPath();
+		const { stdout, stderr } = await execFileAsync(helperPath, arguments_, {
+			windowsHide: true,
+		});
+
+		if (stderr.trim().length > 0) {
+			throw new Error(stderr.trim());
+		}
+
+		return JSON.parse(stdout) as T;
+	}
 }
 
 export const audioSessionProvider = new AudioSessionProvider();
