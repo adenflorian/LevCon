@@ -57,6 +57,23 @@
 					"TitleAlignment": "middle"
 				}
 			]
+		},
+		{
+			"Name": "Toggle Output Volume",
+			"UUID": "com.david-valachovic.levcon.output.toggle",
+			"Icon": "imgs/plugin/category-icon",
+			"Tooltip": "Toggles whether the output volume tile is shown.",
+			"UserTitleEnabled": false,
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/plugin/category-icon",
+					"ShowTitle": false,
+					"TitleAlignment": "middle"
+				}
+			]
 		}
 	],
 	"Category": "LevCon",

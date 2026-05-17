@@ -8,6 +8,7 @@ import type { MixerSession } from "../types/mixer";
 
 const INACTIVE_ICON_DELAY_MS = 5_000;
 const PEAK_ACTIVITY_THRESHOLD = 0.001;
+let showOutputVolume = true;
 let sessionPriorityMatchers: string[] = [];
 const DEFAULT_BLACKLIST_MATCHERS = ["system sounds"];
 let sessionBlacklistMatchers: string[] = DEFAULT_BLACKLIST_MATCHERS;
@@ -67,6 +68,15 @@ export class AudioSessionProvider {
 	public setBlacklistMatchers(matchers: string[] | undefined): void {
 		sessionBlacklistMatchers = normalizeBlacklistMatchers(matchers);
 		this.cachedSessions = undefined;
+	}
+
+	public setShowOutputVolume(visible: boolean | undefined): void {
+		showOutputVolume = visible ?? true;
+		this.cachedSessions = undefined;
+	}
+
+	public isOutputVolumeVisible(): boolean {
+		return showOutputVolume;
 	}
 
 	public applyOptimisticVolumeChange(sessionId: string, delta: number): void {
@@ -371,7 +381,7 @@ function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
 		};
 	}).sort(compareSessions);
 
-	if (!pinnedOutput || isBlacklistedSession(pinnedOutput)) {
+	if (!showOutputVolume || !pinnedOutput || isBlacklistedSession(pinnedOutput)) {
 		return normalizedApps;
 	}
 

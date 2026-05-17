@@ -26,6 +26,7 @@ export type MixerGlobalSettings = {
 	stepSize?: number;
 	priorityMatchers?: string[];
 	blacklistMatchers?: string[];
+	showOutputVolume?: boolean;
 };
 
 export type MixerViewModel = {

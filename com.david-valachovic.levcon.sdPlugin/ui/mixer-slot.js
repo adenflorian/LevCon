@@ -16,6 +16,7 @@ let propertyInspectorUuid;
  */
 let actionContext;
 let actionUuid;
+let showOutputVolume = true;
 
 /**
  * @type {{ stepSizeNumber: HTMLInputElement; stepSizeRange: HTMLInputElement; priorityMatchers: HTMLTextAreaElement; blacklistMatchers: HTMLTextAreaElement; }}
@@ -90,9 +91,13 @@ elements.blacklistMatchers.addEventListener("input", () => {
 function applyActionSettings(settings) {}
 
 /**
- * @param {{ stepSize: any; priorityMatchers: any[]; blacklistMatchers: any[]; }} settings
+ * @param {{ stepSize: any; priorityMatchers: any[]; blacklistMatchers: any[]; showOutputVolume?: boolean; }} settings
  */
 function applyGlobalSettings(settings) {
+  showOutputVolume =
+    typeof settings.showOutputVolume === "boolean"
+      ? settings.showOutputVolume
+      : true;
   setMirroredValue(
     elements.stepSizeRange,
     elements.stepSizeNumber,
@@ -157,6 +162,7 @@ function currentGlobalSettings() {
     stepSize: clampNumber(elements.stepSizeNumber.value, 1, 25, 2),
     priorityMatchers: parsePriorityMatchers(elements.priorityMatchers.value),
     blacklistMatchers: parsePriorityMatchers(elements.blacklistMatchers.value),
+    showOutputVolume,
   };
 }
 
@@ -191,7 +197,7 @@ function persistSettings() {
 }
 
 /**
- * @param {{ event: any; uuid?: any; context?: any; payload?: {  } | { stepSize: any; priorityMatchers: string[]; blacklistMatchers: string[]; }; }} payload
+ * @param {{ event: any; uuid?: any; context?: any; payload?: {  } | { stepSize: any; priorityMatchers: string[]; blacklistMatchers: string[]; showOutputVolume?: boolean; }; }} payload
  */
 function send(payload) {
   if (!websocket || websocket.readyState !== WebSocket.OPEN) {

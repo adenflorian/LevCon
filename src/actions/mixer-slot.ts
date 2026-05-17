@@ -37,6 +37,7 @@ streamDeck.settings.onDidReceiveGlobalSettings<MixerGlobalSettings>((ev) => {
 	globalStepSize = clampStepSize(ev.settings.stepSize);
 	audioSessionProvider.setPriorityMatchers(ev.settings.priorityMatchers);
 	audioSessionProvider.setBlacklistMatchers(ev.settings.blacklistMatchers);
+	audioSessionProvider.setShowOutputVolume(ev.settings.showOutputVolume);
 });
 
 @action({ UUID: MIXER_SLOT_UUID })
@@ -495,6 +496,7 @@ async function ensureGlobalSettingsLoaded(): Promise<void> {
 				globalStepSize = clampStepSize(settings.stepSize);
 				audioSessionProvider.setPriorityMatchers(settings.priorityMatchers);
 				audioSessionProvider.setBlacklistMatchers(settings.blacklistMatchers);
+				audioSessionProvider.setShowOutputVolume(settings.showOutputVolume);
 			});
 	}
 
