@@ -44,14 +44,13 @@ class MixerRuntime {
 		return updated;
 	}
 
-	async getPageSummary(deviceId: string): Promise<{ page: number; totalPages: number }> {
-		const page = this.pageByDevice.get(deviceId) ?? 0;
+	async getPageSummary(deviceId: string): Promise<{ page: number; totalPages: number; hasPrevious: boolean; hasNext: boolean }> {
 		const filters = Array.from(this.slots.values())
 			.filter((slot) => slot.deviceId === deviceId)
 			.map((slot) => slot.filter);
 
 		if (filters.length === 0) {
-			return { page, totalPages: 1 };
+			return { page: 0, totalPages: 1, hasPrevious: false, hasNext: false };
 		}
 
 		const totals = await Promise.all(filters.map(async (filter) => {
@@ -59,9 +58,14 @@ class MixerRuntime {
 			return computeTotalPages(sessions.length, this.getSlotCount(deviceId));
 		}));
 
+		const totalPages = Math.max(1, ...totals);
+		const page = this.clampPage(deviceId, totalPages);
+
 		return {
 			page,
-			totalPages: Math.max(1, ...totals),
+			totalPages,
+			hasPrevious: page > 0,
+			hasNext: page < totalPages - 1,
 		};
 	}
 

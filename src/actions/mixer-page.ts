@@ -41,7 +41,7 @@ export class MixerPreviousPageAction extends SingletonAction<PagerSettings> {
 
 	private async render(action: PagerActionInstance, label: string): Promise<void> {
 		const summary = await mixerRuntime.getPageSummary(action.device.id);
-		await renderPagerAction(action, 'left', summary.page + 1, summary.totalPages);
+		await renderPagerAction(action, label, 'left', summary.page + 1, summary.totalPages, summary.hasPrevious);
 	}
 }
 
@@ -74,6 +74,6 @@ export class MixerNextPageAction extends SingletonAction<PagerSettings> {
 
 	private async render(action: PagerActionInstance, label: string): Promise<void> {
 		const summary = await mixerRuntime.getPageSummary(action.device.id);
-		await renderPagerAction(action, 'right', summary.page + 1, summary.totalPages);
+		await renderPagerAction(action, label, 'right', summary.page + 1, summary.totalPages, summary.hasNext);
 	}
 }

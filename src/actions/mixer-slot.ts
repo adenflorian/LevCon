@@ -108,11 +108,12 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 
 		const muteLabel = view.session.muted ? "M" : `${view.session.volume}%`;
 		if (action.isDial()) {
-			await action.setImage(renderDialIconSvg(view.session.iconDataUri, view.session.muted));
+			const dialIcon = renderDialIconSvg(view.session, view.session.muted);
+			await action.setImage(dialIcon);
 			await action.setFeedbackLayout(DIAL_LAYOUT);
 			await action.setFeedback({
 				background: renderDialBackgroundSvg(),
-				icon: renderDialIconSvg(view.session.iconDataUri, view.session.muted),
+				icon: dialIcon,
 				level: {
 					value: view.session.volume,
 					bar_fill_c: view.session.muted ? "#6d7783" : "#f6f8fb",
@@ -183,13 +184,28 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 }
 
 function labelForSession(session: { displayName: string; shortDisplayName?: string }): string {
+	if (isSystemSession(session)) {
+		return "System";
+	}
+
 	const label = session.shortDisplayName ?? session.displayName;
 	return label.length <= 8 ? label : `${label.slice(0, 8)}`;
 }
 
+
 function dialLabel(session: { displayName: string }): string {
+	if (isSystemSession(session)) {
+		return "System Sounds";
+	}
+
 	return session.displayName.length <= 18 ? session.displayName : `${session.displayName.slice(0, 18)}...`;
 }
+
+function isSystemSession(session: { displayName: string; shortDisplayName?: string }): boolean {
+	const normalizedDisplayName = session.displayName.trim().toLowerCase();
+	const normalizedShortName = session.shortDisplayName?.trim().toLowerCase();
+	return normalizedDisplayName === "system sounds" || normalizedShortName === "system";
+	}
 
 function escapeXml(value: string): string {
 	return value
@@ -208,6 +224,16 @@ function fallbackGlyphSvg(): string {
 	`)}`;
 }
 
+function systemSoundsGlyphSvg(): string {
+	return `data:image/svg+xml;utf8,${encodeURIComponent(`
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+			<path d="M12 26h10l12-10v32L22 38H12z" fill="#ffffff"/>
+			<path d="M42 24a12 12 0 0 1 0 16" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-width="4"/>
+			<path d="M48 18a20 20 0 0 1 0 28" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-width="4" opacity="0.85"/>
+		</svg>
+	`)}`;
+}
+
 function renderDialBackgroundSvg(): string {
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
@@ -216,8 +242,16 @@ function renderDialBackgroundSvg(): string {
 	`)}`;
 }
 
-function renderDialIconSvg(iconDataUri?: string, muted = false): string {
-	const icon = iconDataUri ?? fallbackGlyphSvg();
+function renderDialIconSvg(
+	session?: { iconDataUri?: string; shortDisplayName?: string; displayName?: string },
+	muted = false,
+): string {
+	const icon = session
+		? (isSystemSession({
+			shortDisplayName: session.shortDisplayName,
+			displayName: session.displayName ?? "Session",
+		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg()))
+		: fallbackGlyphSvg();
 	const iconOpacity = muted ? "0.52" : "1";
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
@@ -235,15 +269,20 @@ function renderKeySvg(
 		shortDisplayName: session.shortDisplayName,
 		displayName: session.displayName ?? "Session",
 	})) : "";
-	const icon = session?.iconDataUri ?? fallbackGlyphSvg();
+	const icon = session
+		? (isSystemSession({
+			shortDisplayName: session.shortDisplayName,
+			displayName: session.displayName ?? "Session",
+		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg()))
+		: fallbackGlyphSvg();
 	const muted = session?.muted ?? false;
-	const value = valueText ? `<text x="72" y="124" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="14" font-weight="700">${escapeXml(valueText)}</text>` : "";
+	const value = valueText ? `<text x="72" y="126" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="15" font-weight="700">${escapeXml(valueText)}</text>` : "";
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
 			<rect x="6" y="6" width="132" height="132" rx="18" fill="#0f1318" stroke="#2a3139" stroke-width="2"/>
 			<image href="${icon}" x="32" y="22" width="80" height="80" opacity="${muted ? "0.5" : "1"}" preserveAspectRatio="xMidYMid meet" />
-			<text x="72" y="108" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="19" font-weight="700">${label}</text>
+			<text x="72" y="110" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="22" font-weight="700">${label}</text>
 			${value}
 		</svg>
 	`)}`;
