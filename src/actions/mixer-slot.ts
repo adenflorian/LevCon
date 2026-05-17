@@ -36,12 +36,12 @@ streamDeck.settings.onDidReceiveGlobalSettings<MixerGlobalSettings>((ev) => {
 export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 	private readonly dialRenderStateByContext = new Map<string, DialRenderState>();
 
-	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<MixerSlotSettings>): Promise<void> {
+	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<MixerSlotSettings>): Promise<void> {
 		this.registerAction(ev.action);
 		await this.render(ev.action);
 	}
 
-	override async onDialRotate(ev: DialRotateEvent<MixerSlotSettings>): Promise<void> {
+	public override async onDialRotate(ev: DialRotateEvent<MixerSlotSettings>): Promise<void> {
 		await ensureGlobalSettingsLoaded();
 		const stepSize = globalStepSize;
 		const session = await mixerRuntime.adjustSlot(ev.action.device.id, resolveSlotIndex(ev.action), stepSize * ev.payload.ticks);
@@ -53,33 +53,33 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 		await this.renderDialSession(ev.action, session);
 	}
 
-	override async onDialDown(ev: DialDownEvent<MixerSlotSettings>): Promise<void> {
+	public override async onDialDown(ev: DialDownEvent<MixerSlotSettings>): Promise<void> {
 		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action));
 		if (!changed) {
 			await ev.action.showAlert();
 		}
 	}
 
-	override async onKeyDown(ev: KeyDownEvent<MixerSlotSettings>): Promise<void> {
+	public override async onKeyDown(ev: KeyDownEvent<MixerSlotSettings>): Promise<void> {
 		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action));
 		if (!changed) {
 			await ev.action.showAlert();
 		}
 	}
 
-	override async onTouchTap(ev: TouchTapEvent<MixerSlotSettings>): Promise<void> {
+	public override async onTouchTap(ev: TouchTapEvent<MixerSlotSettings>): Promise<void> {
 		const changed = await mixerRuntime.toggleSlotMute(ev.action.device.id, resolveSlotIndex(ev.action));
 		if (!changed) {
 			await ev.action.showAlert();
 		}
 	}
 
-	override async onWillAppear(ev: WillAppearEvent<MixerSlotSettings>): Promise<void> {
+	public override async onWillAppear(ev: WillAppearEvent<MixerSlotSettings>): Promise<void> {
 		this.registerAction(ev.action);
 		await this.render(ev.action);
 	}
 
-	override onWillDisappear(ev: WillDisappearEvent<MixerSlotSettings>): void {
+	public override onWillDisappear(ev: WillDisappearEvent<MixerSlotSettings>): void {
 		this.dialRenderStateByContext.delete(ev.action.id);
 		mixerRuntime.unregister(ev.action.id);
 	}

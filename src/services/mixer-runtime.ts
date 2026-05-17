@@ -33,23 +33,23 @@ class MixerRuntime {
 	private refreshTimer?: ReturnType<typeof setInterval>;
 	private refreshLoopActive = false;
 
-	registerPager(registration: PagerRegistration): void {
+	public registerPager(registration: PagerRegistration): void {
 		this.pagers.set(registration.contextId, registration);
 		this.ensureRefreshLoop();
 	}
 
-	registerSlot(registration: SlotRegistration): void {
+	public registerSlot(registration: SlotRegistration): void {
 		this.slots.set(registration.contextId, registration);
 		this.ensureRefreshLoop();
 	}
 
-	unregister(contextId: string): void {
+	public unregister(contextId: string): void {
 		this.pagers.delete(contextId);
 		this.slots.delete(contextId);
 		this.stopRefreshLoopIfIdle();
 	}
 
-	async adjustSlot(deviceId: string, slotIndex: number, delta: number): Promise<MixerSession | undefined> {
+	public async adjustSlot(deviceId: string, slotIndex: number, delta: number): Promise<MixerSession | undefined> {
 		const view = await this.getView(deviceId, slotIndex);
 		if (!view.session) {
 			return undefined;
@@ -65,7 +65,7 @@ class MixerRuntime {
 		};
 	}
 
-	async getPageSummary(deviceId: string): Promise<{ page: number; totalPages: number; hasPrevious: boolean; hasNext: boolean }> {
+	public async getPageSummary(deviceId: string): Promise<{ page: number; totalPages: number; hasPrevious: boolean; hasNext: boolean }> {
 		const deviceSlots = Array.from(this.slots.values()).filter((slot) => slot.deviceId === deviceId);
 
 		if (deviceSlots.length === 0) {
@@ -85,7 +85,7 @@ class MixerRuntime {
 		};
 	}
 
-	async getView(deviceId: string, slotIndex: number): Promise<MixerViewModel> {
+	public async getView(deviceId: string, slotIndex: number): Promise<MixerViewModel> {
 		const sessions = await audioSessionProvider.listSessions();
 		const slotCount = this.getSlotCount(deviceId);
 		const { pinnedOutput, appSessions } = splitMixerSessions(sessions);
@@ -108,7 +108,7 @@ class MixerRuntime {
 		};
 	}
 
-	async movePage(deviceId: string, delta: number): Promise<void> {
+	public async movePage(deviceId: string, delta: number): Promise<void> {
 		const summary = await this.getPageSummary(deviceId);
 		const current = this.pageByDevice.get(deviceId) ?? 0;
 		const next = clamp(current + delta, 0, Math.max(0, summary.totalPages - 1));
@@ -116,7 +116,7 @@ class MixerRuntime {
 		await this.refreshDevice(deviceId);
 	}
 
-	async toggleSlotMute(deviceId: string, slotIndex: number): Promise<boolean> {
+	public async toggleSlotMute(deviceId: string, slotIndex: number): Promise<boolean> {
 		const view = await this.getView(deviceId, slotIndex);
 		if (!view.session) {
 			return false;

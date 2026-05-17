@@ -50,7 +50,7 @@ export class AudioSessionProvider {
 	private helperRequestChain = Promise.resolve();
 	private pendingHelperResponses: PendingHelperResponse[] = [];
 
-	async listSessions(): Promise<MixerSession[]> {
+	public async listSessions(): Promise<MixerSession[]> {
 		if (this.cachedSessions) {
 			void this.refreshSessions();
 			return this.cachedSessions;
@@ -59,7 +59,7 @@ export class AudioSessionProvider {
 		return this.refreshSessions();
 	}
 
-	setPriorityMatchers(matchers: string[] | undefined): void {
+	public setPriorityMatchers(matchers: string[] | undefined): void {
 		sessionPriorityMatchers = normalizePriorityMatchers(matchers);
 
 		if (this.cachedSessions) {
@@ -67,12 +67,12 @@ export class AudioSessionProvider {
 		}
 	}
 
-	setBlacklistMatchers(matchers: string[] | undefined): void {
+	public setBlacklistMatchers(matchers: string[] | undefined): void {
 		sessionBlacklistMatchers = normalizeBlacklistMatchers(matchers);
 		this.cachedSessions = undefined;
 	}
 
-	applyOptimisticVolumeChange(sessionId: string, delta: number): void {
+	public applyOptimisticVolumeChange(sessionId: string, delta: number): void {
 		const current = this.optimisticStateBySessionId.get(sessionId);
 		const nextVolume = Math.max(0, Math.min(100, (current?.volume ?? 0) + delta));
 		this.optimisticStateBySessionId.set(sessionId, {
@@ -87,7 +87,7 @@ export class AudioSessionProvider {
 		}));
 	}
 
-	setOptimisticSessionState(session: MixerSession): void {
+	public setOptimisticSessionState(session: MixerSession): void {
 		this.optimisticStateBySessionId.set(session.id, {
 			volume: session.volume,
 			muted: session.muted,
@@ -97,7 +97,7 @@ export class AudioSessionProvider {
 		}));
 	}
 
-	async adjustVolume(sessionId: string, delta: number): Promise<boolean> {
+	public async adjustVolume(sessionId: string, delta: number): Promise<boolean> {
 		const response = await this.runHelper<HelperMutationResponse>({
 			command: "adjust-volume",
 			id: sessionId,
@@ -113,7 +113,7 @@ export class AudioSessionProvider {
 		return response.ok;
 	}
 
-	async toggleMute(sessionId: string): Promise<boolean> {
+	public async toggleMute(sessionId: string): Promise<boolean> {
 		const response = await this.runHelper<HelperMutationResponse>({
 			command: "toggle-mute",
 			id: sessionId,

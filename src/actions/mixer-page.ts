@@ -14,11 +14,11 @@ export const MIXER_NEXT_UUID = "com.david-valachovic.levcon.mixer.next";
 
 @action({ UUID: MIXER_PREVIOUS_UUID })
 export class MixerPreviousPageAction extends SingletonAction<PagerSettings> {
-	override async onKeyDown(ev: KeyDownEvent<PagerSettings>): Promise<void> {
+	public override async onKeyDown(ev: KeyDownEvent<PagerSettings>): Promise<void> {
 		await mixerRuntime.movePage(ev.action.device.id, -1);
 	}
 
-	override async onWillAppear(ev: WillAppearEvent<PagerSettings>): Promise<void> {
+	public override async onWillAppear(ev: WillAppearEvent<PagerSettings>): Promise<void> {
 		if (!ev.action.isKey()) {
 			return;
 		}
@@ -27,7 +27,7 @@ export class MixerPreviousPageAction extends SingletonAction<PagerSettings> {
 		await this.render(ev.action, "Prev");
 	}
 
-	override onWillDisappear(ev: WillDisappearEvent<PagerSettings>): void {
+	public override onWillDisappear(ev: WillDisappearEvent<PagerSettings>): void {
 		mixerRuntime.unregister(ev.action.id);
 	}
 
@@ -47,11 +47,11 @@ export class MixerPreviousPageAction extends SingletonAction<PagerSettings> {
 
 @action({ UUID: MIXER_NEXT_UUID })
 export class MixerNextPageAction extends SingletonAction<PagerSettings> {
-	override async onKeyDown(ev: KeyDownEvent<PagerSettings>): Promise<void> {
+	public override async onKeyDown(ev: KeyDownEvent<PagerSettings>): Promise<void> {
 		await mixerRuntime.movePage(ev.action.device.id, 1);
 	}
 
-	override async onWillAppear(ev: WillAppearEvent<PagerSettings>): Promise<void> {
+	public override async onWillAppear(ev: WillAppearEvent<PagerSettings>): Promise<void> {
 		if (!ev.action.isKey()) {
 			return;
 		}
@@ -60,7 +60,7 @@ export class MixerNextPageAction extends SingletonAction<PagerSettings> {
 		await this.render(ev.action, "Next");
 	}
 
-	override onWillDisappear(ev: WillDisappearEvent<PagerSettings>): void {
+	public override onWillDisappear(ev: WillDisappearEvent<PagerSettings>): void {
 		mixerRuntime.unregister(ev.action.id);
 	}
 
