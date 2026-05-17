@@ -53,8 +53,20 @@ window.connectElgatoStreamDeckSocket = (
   });
 };
 
-bindMirroredInputs(elements.slotIndexRange, elements.slotIndexNumber, 0, 7, persistActionSettings);
-bindMirroredInputs(elements.stepSizeRange, elements.stepSizeNumber, 1, 25, persistGlobalSettings);
+bindMirroredInputs(
+  elements.slotIndexRange,
+  elements.slotIndexNumber,
+  0,
+  7,
+  persistActionSettings,
+);
+bindMirroredInputs(
+  elements.stepSizeRange,
+  elements.stepSizeNumber,
+  1,
+  25,
+  persistGlobalSettings,
+);
 elements.showApps.addEventListener("change", persistSettings);
 elements.refreshPreview.addEventListener("click", () => requestPreview());
 
@@ -215,7 +227,11 @@ function persistActionSettings() {
 
 function persistGlobalSettings() {
   const settings = currentGlobalSettings();
-  send({ event: "setGlobalSettings", context: propertyInspectorUuid, payload: settings });
+  send({
+    event: "setGlobalSettings",
+    context: propertyInspectorUuid,
+    payload: settings,
+  });
   return settings;
 }
 

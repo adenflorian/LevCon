@@ -24,10 +24,17 @@ export class AudioSessionProvider {
 	private helperExecutablePath?: string;
 	private readonly lastActiveAtBySessionId = new Map<string, number>();
 	private readonly optimisticStateBySessionId = new Map<string, { volume?: number; muted?: boolean }>();
+	private readonly cachedSessionsByVisibility = new Map<SessionVisibility, MixerSession[]>();
+	private readonly inFlightSessionsByVisibility = new Map<SessionVisibility, Promise<MixerSession[]>>();
 
 	async listSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
-		const response = await this.runHelper<HelperListResponse>(["list", "--visibility", visibility]);
-		return normalizeSessions(this.decorateRecentActivity(this.applyOptimisticState([response.endpoint, ...response.sessions])));
+		const cachedSessions = this.cachedSessionsByVisibility.get(visibility);
+		if (cachedSessions) {
+			void this.refreshSessions(visibility);
+			return cachedSessions;
+		}
+
+		return this.refreshSessions(visibility);
 	}
 
 	applyOptimisticVolumeChange(sessionId: string, delta: number): void {
@@ -38,6 +45,11 @@ export class AudioSessionProvider {
 			volume: nextVolume,
 			muted: nextVolume > 0 ? false : current?.muted,
 		});
+		this.updateCachedSession(sessionId, (session) => ({
+			...session,
+			volume: nextVolume,
+			muted: nextVolume > 0 ? false : session.muted,
+		}));
 	}
 
 	setOptimisticSessionState(session: MixerSession): void {
@@ -45,6 +57,9 @@ export class AudioSessionProvider {
 			volume: session.volume,
 			muted: session.muted,
 		});
+		this.updateCachedSession(session.id, () => ({
+			...session,
+		}));
 	}
 
 	async adjustVolume(sessionId: string, delta: number): Promise<boolean> {
@@ -60,6 +75,8 @@ export class AudioSessionProvider {
 			this.optimisticStateBySessionId.delete(sessionId);
 		}
 
+		await this.refreshAllSessionCaches();
+
 		return response.ok;
 	}
 
@@ -74,7 +91,38 @@ export class AudioSessionProvider {
 			this.optimisticStateBySessionId.delete(sessionId);
 		}
 
+		await this.refreshAllSessionCaches();
+
 		return response.ok;
+	}
+
+	private refreshSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
+		const inFlight = this.inFlightSessionsByVisibility.get(visibility);
+		if (inFlight) {
+			return inFlight;
+		}
+
+		const nextFetch = this.fetchSessions(visibility)
+			.finally(() => {
+				this.inFlightSessionsByVisibility.delete(visibility);
+			});
+
+		this.inFlightSessionsByVisibility.set(visibility, nextFetch);
+		return nextFetch;
+	}
+
+	private async fetchSessions(visibility: SessionVisibility): Promise<MixerSession[]> {
+		const response = await this.runHelper<HelperListResponse>(["list", "--visibility", visibility]);
+		const sessions = normalizeSessions(this.decorateRecentActivity(this.applyOptimisticState([response.endpoint, ...response.sessions])));
+		this.cachedSessionsByVisibility.set(visibility, sessions);
+		return sessions;
+	}
+
+	private async refreshAllSessionCaches(): Promise<void> {
+		await Promise.all([
+			this.refreshSessions("all"),
+			this.refreshSessions("active"),
+		]);
 	}
 
 	private async resolveHelperPath(): Promise<string> {
@@ -159,6 +207,24 @@ export class AudioSessionProvider {
 				muted: optimisticState.muted ?? session.muted,
 			};
 		});
+	}
+
+	private updateCachedSession(sessionId: string, updater: (session: MixerSession) => MixerSession): void {
+		for (const [visibility, sessions] of this.cachedSessionsByVisibility.entries()) {
+			let changed = false;
+			const nextSessions = sessions.map((session) => {
+				if (session.id !== sessionId) {
+					return session;
+				}
+
+				changed = true;
+				return updater(session);
+			});
+
+			if (changed) {
+				this.cachedSessionsByVisibility.set(visibility, nextSessions);
+			}
+		}
 	}
 }
 
