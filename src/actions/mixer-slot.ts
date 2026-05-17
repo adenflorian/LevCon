@@ -250,6 +250,14 @@ function renderDialIconSvg(
 	session?: { iconDataUri?: string; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; recentlyActive?: boolean },
 	muted = false,
 ): string {
+	if (!session) {
+		return `data:image/svg+xml;utf8,${encodeURIComponent(`
+			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+				<rect width="64" height="64" fill="#000000" fill-opacity="0"/>
+			</svg>
+		`)}`;
+	}
+
 	const icon = session
 		? (isSystemSession({
 			shortDisplayName: session.shortDisplayName,
@@ -257,9 +265,9 @@ function renderDialIconSvg(
 			isSystemSoundsSession: session.isSystemSoundsSession,
 		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg()))
 		: fallbackGlyphSvg();
-	const iconOpacity = muted ? (session?.recentlyActive === false ? "0.24" : "0.52") : (session?.recentlyActive === false ? "0.42" : "1");
-	const filter = session?.recentlyActive === false ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
-	const filterAttribute = session?.recentlyActive === false ? ' filter="url(#inactive-icon)"' : '';
+	const iconOpacity = muted ? (session.recentlyActive === false ? "0.38" : "0.56") : (session.recentlyActive === false ? "0.62" : "1");
+	const filter = session.recentlyActive === false ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
+	const filterAttribute = session.recentlyActive === false ? ' filter="url(#inactive-icon)"' : '';
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
@@ -284,19 +292,22 @@ function renderKeySvg(
 			displayName: session.displayName ?? "Session",
 			isSystemSoundsSession: session.isSystemSoundsSession,
 		}) ? systemSoundsGlyphSvg() : (session.iconDataUri ?? fallbackGlyphSvg()))
-		: fallbackGlyphSvg();
+		: undefined;
 	const muted = session?.muted ?? false;
 	const inactive = session?.recentlyActive === false;
-	const iconOpacity = muted ? (inactive ? "0.24" : "0.5") : (inactive ? "0.42" : "1");
+	const iconOpacity = muted ? (inactive ? "0.38" : "0.5") : (inactive ? "0.62" : "1");
 	const filter = inactive ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
 	const filterAttribute = inactive ? ' filter="url(#inactive-icon)"' : '';
+	const image = icon
+		? `<image href="${icon}" x="32" y="22" width="80" height="80" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet"${filterAttribute} />`
+		: "";
 	const value = valueText ? `<text x="72" y="126" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="15" font-weight="700">${escapeXml(valueText)}</text>` : "";
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
 			<rect x="6" y="6" width="132" height="132" rx="18" fill="#0f1318" stroke="#2a3139" stroke-width="2"/>
 			${filter}
-			<image href="${icon}" x="32" y="22" width="80" height="80" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet"${filterAttribute} />
+			${image}
 			<text x="72" y="110" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="22" font-weight="700">${label}</text>
 			${value}
 		</svg>

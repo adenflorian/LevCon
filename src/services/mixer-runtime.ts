@@ -155,9 +155,7 @@ class MixerRuntime {
 				...Array.from(this.slots.values()).map((slot) => slot.deviceId),
 			]);
 
-			for (const deviceId of deviceIds) {
-				await this.refreshDevice(deviceId);
-			}
+			await Promise.all(Array.from(deviceIds, async (deviceId) => this.refreshDevice(deviceId)));
 		} finally {
 			this.refreshLoopActive = false;
 		}
@@ -169,9 +167,7 @@ class MixerRuntime {
 			...Array.from(this.slots.values()).filter((slot) => slot.deviceId === deviceId),
 		];
 
-		for (const refreshable of refreshables) {
-			await refreshable.refresh();
-		}
+		await Promise.all(refreshables.map(async (refreshable) => refreshable.refresh()));
 	}
 }
 

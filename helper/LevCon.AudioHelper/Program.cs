@@ -59,10 +59,10 @@ static object AdjustVolume(string sessionId, int delta)
 
 static string BuildDisplayName(AudioSessionControl session)
 {
-	if (session.IsSystemSoundsSession)
-	{
-		return "System Sounds";
-	}
+  if (session.IsSystemSoundsSession)
+  {
+    return "System Sounds";
+  }
 
   if (!string.IsNullOrWhiteSpace(session.DisplayName))
   {

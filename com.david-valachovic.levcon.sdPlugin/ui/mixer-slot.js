@@ -144,8 +144,16 @@ function handlePluginMessage(payload) {
     appendDetail(details, "Grouping", session.groupingParam);
     appendDetail(details, "State", session.state);
     appendDetail(details, "Peak", formatPeakValue(session.peakValue));
-    appendDetail(details, "System Session", formatBoolean(session.isSystemSoundsSession));
-    appendDetail(details, "Recent Activity", formatBoolean(session.recentlyActive));
+    appendDetail(
+      details,
+      "System Session",
+      formatBoolean(session.isSystemSoundsSession),
+    );
+    appendDetail(
+      details,
+      "Recent Activity",
+      formatBoolean(session.recentlyActive),
+    );
 
     item.append(name, meta, details);
     elements.sessionPreview.append(item);
