@@ -22,8 +22,6 @@ export function renderPagerKeySvg(label: string, direction: 'left' | 'right', pa
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
-			<rect x="6" y="6" width="132" height="132" rx="18" fill="#0f1318" stroke="#2a3139" stroke-width="2"/>
-			<rect x="22" y="20" width="100" height="108" rx="24" fill="#000000" stroke="#242b33" stroke-width="2"/>
 			${chevron}
 			<text x="72" y="112" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, sans-serif" font-size="22" font-weight="800">${label}</text>
 			<text x="72" y="132" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, sans-serif" font-size="18" font-weight="800">${page}/${totalPages}</text>

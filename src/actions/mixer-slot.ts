@@ -166,8 +166,8 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 			level: {
 				value: session.volume,
 				bar_fill_c: session.muted ? "#6d7783" : "#f6f8fb",
-				bar_bg_c: "#242d36",
-				bar_border_c: "#242d36",
+				bar_bg_c: "#00000000",
+				bar_border_c: "#00000000",
 				subtype: BarSubType.Groove,
 			},
 			value: muteLabel,
@@ -175,7 +175,7 @@ export class MixerSlotAction extends SingletonAction<MixerSlotSettings> {
 
 		if (!renderState?.layoutApplied) {
 			await action.setFeedbackLayout(DIAL_LAYOUT);
-			feedback.background = renderDialBackgroundSvg();
+			feedback.background = renderTransparentAssetSvg(200, 100);
 		}
 
 		if (renderState?.name !== name) {
@@ -363,14 +363,6 @@ function renderTransparentAssetSvg(width: number, height: number): string {
 	`)}`;
 }
 
-function renderDialBackgroundSvg(): string {
-	return `data:image/svg+xml;utf8,${encodeURIComponent(`
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
-			<rect x="0.5" y="0.5" width="199" height="99" rx="12" fill="#171d24" stroke="#242b33" />
-		</svg>
-	`)}`;
-}
-
 function dialIconStateKey(
 	session: { id?: string; iconDataUri?: string; shortDisplayName?: string; displayName?: string; isSystemSoundsSession?: boolean; isOutputVolume?: boolean; recentlyActive?: boolean },
 	muted: boolean,
@@ -463,7 +455,6 @@ function renderKeySvg(
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
-			<rect x="6" y="6" width="132" height="132" rx="18" fill="#0f1318" stroke="#2a3139" stroke-width="2"/>
 			${filter}
 			${image}
 			${mutedOverlay}
