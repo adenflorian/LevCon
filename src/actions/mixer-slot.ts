@@ -315,13 +315,14 @@ function escapeXml(value: string): string {
 }
 
 function renderMutedOverlaySvg(size: number, x: number, y: number): string {
-	const strokeWidth = Math.max(2, Math.round(size * 0.12));
+	const ringStrokeWidth = Math.max(4, Math.round(size * 0.14));
+	const slashStrokeWidth = Math.max(5, Math.round(size * 0.16));
+	const radius = (size / 2) - (ringStrokeWidth / 2);
 
 	return `
 		<g transform="translate(${x} ${y})">
-			<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="#d93a45"/>
-			<path d="M${size * 0.22} ${size * 0.42}h${size * 0.18}l${size * 0.16}-${size * 0.16}v${size * 0.48}l-${size * 0.16}-${size * 0.16}h-${size * 0.18}z" fill="#ffffff"/>
-			<path d="M${size * 0.7} ${size * 0.3}L${size * 0.3} ${size * 0.7}" stroke="#ffffff" stroke-width="${strokeWidth}" stroke-linecap="round"/>
+			<circle cx="${size / 2}" cy="${size / 2}" r="${radius}" fill="none" stroke="#df2635" stroke-width="${ringStrokeWidth}"/>
+			<path d="M${size * 0.74} ${size * 0.26}L${size * 0.26} ${size * 0.74}" stroke="#df2635" stroke-width="${slashStrokeWidth}" stroke-linecap="round"/>
 		</g>
 	`;
 }
@@ -404,7 +405,7 @@ function renderDialIconSvg(
 	const iconOpacity = muted ? (session.recentlyActive === false ? "0.38" : "0.56") : (session.recentlyActive === false ? "0.62" : "1");
 	const filter = session.recentlyActive === false ? '<defs><filter id="inactive-icon"><feColorMatrix type="saturate" values="0"/></filter></defs>' : '';
 	const filterAttribute = session.recentlyActive === false ? ' filter="url(#inactive-icon)"' : '';
-	const mutedOverlay = muted ? renderMutedOverlaySvg(20, 38, 38) : '';
+	const mutedOverlay = muted ? renderMutedOverlaySvg(50, 7, 7) : '';
 
 	return `data:image/svg+xml;utf8,${encodeURIComponent(`
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
@@ -443,7 +444,7 @@ function renderKeySvg(
 	const image = icon
 		? `<image href="${icon}" x="${keyIconOffset}" y="${keyIconOffset}" width="${keyIconSize}" height="${keyIconSize}" opacity="${iconOpacity}" preserveAspectRatio="xMidYMid meet"${filterAttribute} />`
 		: "";
-	const mutedOverlay = muted ? renderMutedOverlaySvg(28, 86, 68) : '';
+	const mutedOverlay = muted ? renderMutedOverlaySvg(112, 16, 16) : '';
 	const label = labelLines.length > 1
 		? `
 				<text x="72" y="98" text-anchor="middle" fill="#f4f7fb" font-family="Segoe UI, sans-serif" font-size="26" font-weight="700">
