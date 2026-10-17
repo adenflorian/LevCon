@@ -50,7 +50,7 @@ static object ExecuteCommand(string command, string[] commandArgs)
   return command switch
   {
     "list" => ListSessions(),
-    "adjust-volume" => AdjustVolume(GetRequiredOption(commandArgs, "--id"), ParseInt(GetRequiredOption(commandArgs, "--delta"))),
+    "adjust-volume" => AdjustVolume(GetRequiredOption(commandArgs, "--id"), ParseInt(GetRequiredOption(commandArgs, "--delta")), ParseInt(GetOption(commandArgs, "--min") ?? "0"), ParseInt(GetOption(commandArgs, "--max") ?? "100")),
     "toggle-mute" => ToggleMute(GetRequiredOption(commandArgs, "--id")),
     _ => throw new InvalidOperationException($"Unknown command '{command}'."),
   };
@@ -93,18 +93,20 @@ static string[] BuildCommandArgs(HelperRequest request)
   return request.Command switch
   {
     "list" => ["--visibility", request.Visibility ?? "all"],
-    "adjust-volume" => ["--id", request.Id ?? throw new InvalidOperationException("Missing id."), "--delta", (request.Delta ?? throw new InvalidOperationException("Missing delta.")).ToString()],
+    "adjust-volume" => ["--id", request.Id ?? throw new InvalidOperationException("Missing id."), "--delta", (request.Delta ?? throw new InvalidOperationException("Missing delta.")).ToString(), "--min", (request.Min ?? 0).ToString(), "--max", (request.Max ?? 100).ToString()],
     "toggle-mute" => ["--id", request.Id ?? throw new InvalidOperationException("Missing id.")],
     _ => [],
   };
 }
 
-static object AdjustVolume(string sessionId, int delta)
+static object AdjustVolume(string sessionId, int delta, int min, int max)
 {
+  min = Math.Clamp(min, 0, 100);
+  max = Math.Clamp(max, min, 100);
   if (sessionId == EndpointVolumeSessionId)
   {
     using var device = GetDefaultRenderDevice();
-    var endpointTargetVolume = Math.Clamp((int)Math.Round(device.AudioEndpointVolume.MasterVolumeLevelScalar * 100f) + delta, 0, 100);
+    var endpointTargetVolume = Math.Clamp((int)Math.Round(device.AudioEndpointVolume.MasterVolumeLevelScalar * 100f) + delta, min, max);
     device.AudioEndpointVolume.MasterVolumeLevelScalar = endpointTargetVolume / 100f;
     if (endpointTargetVolume > 0)
     {
@@ -120,7 +122,7 @@ static object AdjustVolume(string sessionId, int delta)
     return new MutationResult(false);
   }
 
-  var targetVolume = Math.Clamp((int)Math.Round(session.SimpleAudioVolume.Volume * 100f) + delta, 0, 100);
+  var targetVolume = Math.Clamp((int)Math.Round(session.SimpleAudioVolume.Volume * 100f) + delta, min, max);
   session.SimpleAudioVolume.Volume = targetVolume / 100f;
   if (targetVolume > 0)
   {
@@ -451,7 +453,9 @@ record HelperRequest(
   string Command,
   string? Visibility,
   string? Id,
-  int? Delta
+  int? Delta,
+  int? Min,
+  int? Max
 );
 
 record SessionDto(

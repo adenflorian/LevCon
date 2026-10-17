@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 import type { MixerSession } from "../types/mixer";
 
+import { resolveVolumeLimits, type VolumeLimit } from './volume-limits';
+
 const INACTIVE_ICON_DELAY_MS = 5_000;
 const PEAK_ACTIVITY_THRESHOLD = 0.001;
 let showOutputVolume = true;
@@ -26,6 +28,8 @@ type HelperRequest = {
 	command: "list" | "adjust-volume" | "toggle-mute";
 	id?: string;
 	delta?: number;
+	min?: number;
+	max?: number;
 };
 
 type HelperErrorResponse = {
@@ -39,6 +43,15 @@ type PendingHelperResponse = {
 
 export class AudioSessionProvider {
 	readonly mode = "helper";
+  private volumeLimits: VolumeLimit[] = [];
+
+  public setVolumeLimits(rules: VolumeLimit[] | undefined): void {
+    this.volumeLimits = Array.isArray(rules) ? rules : [];
+  }
+
+  public getVolumeLimits(sessionId: string): { min: number; max: number } {
+    return resolveVolumeLimits(this.cachedSessions?.find(session => session.id === sessionId), this.volumeLimits);
+  }
 
 	private helperExecutablePath?: string;
 	private readonly lastActiveAtBySessionId = new Map<string, number>();
@@ -81,7 +94,8 @@ export class AudioSessionProvider {
 
 	public applyOptimisticVolumeChange(sessionId: string, delta: number): void {
 		const current = this.optimisticStateBySessionId.get(sessionId);
-		const nextVolume = Math.max(0, Math.min(100, (current?.volume ?? 0) + delta));
+		const { min, max } = this.getVolumeLimits(sessionId);
+		const nextVolume = Math.max(min, Math.min(max, (current?.volume ?? 0) + delta));
 		this.optimisticStateBySessionId.set(sessionId, {
 			...current,
 			volume: nextVolume,
@@ -109,6 +123,7 @@ export class AudioSessionProvider {
 			command: "adjust-volume",
 			id: sessionId,
 			delta,
+			...this.getVolumeLimits(sessionId),
 		});
 
 		if (!response.ok) {
