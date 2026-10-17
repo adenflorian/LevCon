@@ -153,20 +153,33 @@ static string BuildDisplayName(AudioSessionControl session)
 
 static string? BuildIconDataUri(AudioSessionControl session)
 {
-  var processPath = GetSessionProcessPath(session);
-  if (string.IsNullOrWhiteSpace(processPath) || !File.Exists(processPath))
-  {
-    return null;
-  }
+  // Prefer an app-provided icon resource; protected games may deny process access.
+  var sessionIcon = TryReadIcon(session.IconPath);
+  return sessionIcon ?? TryReadIcon(GetSessionProcessPath(session));
+}
 
+static string? TryReadIcon(string? location)
+{
+  if (string.IsNullOrWhiteSpace(location)) return null;
+  var path = Environment.ExpandEnvironmentVariables(location.Trim().TrimStart('@'));
+  var index = 0;
+  var comma = path.LastIndexOf(',');
+  if (comma >= 0 && int.TryParse(path[(comma + 1)..].Trim(), out var resourceIndex))
+  {
+    index = resourceIndex;
+    path = path[..comma];
+  }
+  path = path.Trim().Trim('"');
+  if (!File.Exists(path)) return null;
+
+  IntPtr large = IntPtr.Zero;
+  IntPtr small = IntPtr.Zero;
   try
   {
-    using Icon? icon = Icon.ExtractAssociatedIcon(processPath);
-    if (icon is null)
-    {
-      return null;
-    }
-
+    NativeMethods.ExtractIconEx(path, index, out large, out small, 1);
+    var handle = large != IntPtr.Zero ? large : small;
+    using Icon? icon = handle != IntPtr.Zero ? (Icon)Icon.FromHandle(handle).Clone() : Icon.ExtractAssociatedIcon(path);
+    if (icon is null) return null;
     using var bitmap = icon.ToBitmap();
     using var stream = new MemoryStream();
     bitmap.Save(stream, ImageFormat.Png);
@@ -175,6 +188,11 @@ static string? BuildIconDataUri(AudioSessionControl session)
   catch
   {
     return null;
+  }
+  finally
+  {
+    if (large != IntPtr.Zero) NativeMethods.DestroyIcon(large);
+    if (small != IntPtr.Zero && small != large) NativeMethods.DestroyIcon(small);
   }
 }
 
@@ -392,6 +410,17 @@ static string? TryGetProcessPath(uint processId)
     return null;
   }
 
+  // PROCESS_QUERY_LIMITED_INFORMATION works when reading MainModule is denied.
+  using (var handle = NativeMethods.OpenProcess(0x1000, false, processId))
+  {
+    if (!handle.IsInvalid)
+    {
+      var buffer = new StringBuilder(32768);
+      var length = buffer.Capacity;
+      if (NativeMethods.QueryFullProcessImageName(handle, 0, buffer, ref length)) return buffer.ToString();
+    }
+  }
+
   try
   {
     using var process = Process.GetProcessById((int)processId);
@@ -482,6 +511,20 @@ static class HelperCache
 
 static class NativeMethods
 {
+  [DllImport("kernel32.dll", SetLastError = true)]
+  internal static extern Microsoft.Win32.SafeHandles.SafeProcessHandle OpenProcess(uint access, bool inheritHandle, uint processId);
+
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "QueryFullProcessImageNameW", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  internal static extern bool QueryFullProcessImageName(Microsoft.Win32.SafeHandles.SafeProcessHandle process, uint flags, StringBuilder name, ref int size);
+
+  [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "ExtractIconExW")]
+  internal static extern uint ExtractIconEx(string file, int index, out IntPtr large, out IntPtr small, uint count);
+
+  [DllImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  internal static extern bool DestroyIcon(IntPtr icon);
+
   [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "QueryDosDeviceW")]
   internal static extern uint QueryDosDevice(string deviceName, StringBuilder targetPath, int maxLength);
 }

@@ -1,4 +1,4 @@
 - [ ] Setting for min and max volumes, like having spotify min volume of 1 so I can quickly go to min, and if I want to mute I can just press the button, or debounce it so it will only allow going to 0 after being at min volume for a certain amount of time
 - [ ] stop flickering of active apps fighting with eachother
-- [ ] fix some apps not having icons like rocket league
+- [x] fix some apps not having icons like rocket league
 - [ ] setting for log volume curve or something
