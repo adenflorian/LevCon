@@ -24,6 +24,7 @@ export type MixerSlotSettings = Record<string, never>;
 
 export type MixerGlobalSettings = {
 	stepSize?: number;
+	volumeCurve?: "linear" | "logarithmic";
 	priorityMatchers?: string[];
 	blacklistMatchers?: string[];
 	showOutputVolume?: boolean;

@@ -17,6 +17,9 @@ let propertyInspectorUuid;
 let actionContext;
 let actionUuid;
 let showOutputVolume = true;
+let savedGlobalSettings = {};
+const volumeCurveInput = document.getElementById("volumeCurve");
+volumeCurveInput.addEventListener("change", persistGlobalSettings);
 
 /**
  * @type {{ stepSizeNumber: HTMLInputElement; stepSizeRange: HTMLInputElement; priorityMatchers: HTMLTextAreaElement; blacklistMatchers: HTMLTextAreaElement; }}
@@ -94,6 +97,8 @@ function applyActionSettings(settings) {}
  * @param {{ stepSize: any; priorityMatchers: any[]; blacklistMatchers: any[]; showOutputVolume?: boolean; }} settings
  */
 function applyGlobalSettings(settings) {
+  savedGlobalSettings = settings;
+  volumeCurveInput.value = settings.volumeCurve === "logarithmic" ? "logarithmic" : "linear";
   showOutputVolume =
     typeof settings.showOutputVolume === "boolean"
       ? settings.showOutputVolume
@@ -159,6 +164,8 @@ function currentActionSettings() {
 
 function currentGlobalSettings() {
   return {
+    ...savedGlobalSettings,
+    volumeCurve: volumeCurveInput.value,
     stepSize: clampNumber(elements.stepSizeNumber.value, 1, 25, 2),
     priorityMatchers: parsePriorityMatchers(elements.priorityMatchers.value),
     blacklistMatchers: parsePriorityMatchers(elements.blacklistMatchers.value),

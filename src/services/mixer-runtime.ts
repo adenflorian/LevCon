@@ -1,6 +1,8 @@
 import type { MixerSession, MixerViewModel } from "../types/mixer";
 import { audioSessionProvider } from './audio-session-provider';
 
+import { curvedVolumeDelta } from './volume-curve';
+
 const DEVICE_REFRESH_INTERVAL_MS = 500;
 
 type SlotRegistration = {
@@ -17,6 +19,7 @@ type PagerRegistration = {
 };
 
 class MixerRuntime {
+	public volumeCurve: "linear" | "logarithmic" = "linear";
 	private readonly pageByDevice = new Map<string, number>();
 	private readonly pagers = new Map<string, PagerRegistration>();
 	private readonly slots = new Map<string, SlotRegistration>();
@@ -45,6 +48,7 @@ class MixerRuntime {
 			return undefined;
 		}
 
+		delta = curvedVolumeDelta(view.session.volume, delta, this.volumeCurve);
 		audioSessionProvider.setOptimisticSessionState(view.session);
 		audioSessionProvider.applyOptimisticVolumeChange(view.session.id, delta);
 		void this.adjustVolumeImmediately(deviceId, view.session.id, delta);
