@@ -178,7 +178,8 @@ static string? TryReadIcon(string? location)
   {
     NativeMethods.ExtractIconEx(path, index, out large, out small, 1);
     var handle = large != IntPtr.Zero ? large : small;
-    using Icon? icon = handle != IntPtr.Zero ? (Icon)Icon.FromHandle(handle).Clone() : Icon.ExtractAssociatedIcon(path);
+  if (handle == IntPtr.Zero && index != 0) return null;
+  using Icon? icon = handle != IntPtr.Zero ? (Icon)Icon.FromHandle(handle).Clone() : Icon.ExtractAssociatedIcon(path);
     if (icon is null) return null;
     using var bitmap = icon.ToBitmap();
     using var stream = new MemoryStream();
