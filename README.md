@@ -12,7 +12,7 @@ It provides paged per-app volume control, mute toggling, page navigation, and a 
 - Paged app/session navigation
 - Optional pinned output volume tile
 - Global priority list and blacklist matching
-- Stable alphabetical app ordering within priority groups; audio activity changes icon dimming without moving apps between slots
+- Recently audible apps take priority within priority groups, with a five-second grace period for pauses. Concurrently active apps keep a stable alphabetical order; idle apps follow in order of last activity.
 - Windows native audio helper built with .NET and NAudio
 
 ## Actions

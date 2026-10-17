@@ -515,8 +515,19 @@ function compareSessions(left: MixerSession, right: MixerSession): number {
 		return priorityComparison;
 	}
 
-	// Keep slot identity stable when audio starts, stops, or alternates.
-	// Activity still drives icon dimming, but never app ordering.
+	// Hold activity for five seconds so brief gaps do not reshuffle concurrent apps.
+	// Within that group, use stable identity rather than each audio peak's timestamp.
+	const activityRank = compareBooleanRank(left.recentlyActive === true, right.recentlyActive === true);
+	if (activityRank !== 0) {
+		return activityRank;
+	}
+
+	if (!left.recentlyActive && !right.recentlyActive) {
+		const recencyRank = (right.lastAudibleAt ?? 0) - (left.lastAudibleAt ?? 0);
+		if (recencyRank !== 0) {
+			return recencyRank;
+		}
+	}
 
 	const labelRank = baseLabel(left).localeCompare(baseLabel(right), undefined, { sensitivity: "base" });
 	if (labelRank !== 0) {

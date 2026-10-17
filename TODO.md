@@ -1,4 +1,5 @@
-- [x] Setting for min and max volumes, like having spotify min volume of 1 so I can quickly go to min, and if I want to mute I can just press the button, or debounce it so it will only allow going to 0 after being at min volume for a certain amount of time
-- [x] stop flickering of active apps fighting with eachother
-- [x] fix some apps not having icons like rocket league
-- [x] setting for log volume curve or something
+- [x] Add per-app minimum and maximum dial volumes, with independent button mute.
+- [x] Prioritize recently audible apps with a five-second grace period, keeping concurrent apps in a stable order to prevent flickering.
+- [x] Improve missing app icons with session icon resources and protected-process executable lookup.
+- [x] Add an optional logarithmic volume curve.
+- [x] Verify Rocket League's icon while the game is running.
