@@ -1,4 +1,4 @@
-import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -351,7 +351,7 @@ export class AudioSessionProvider {
 
 export const audioSessionProvider = new AudioSessionProvider();
 
-function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
+export function normalizeSessions(sessions: MixerSession[]): MixerSession[] {
 	const pinnedOutput = sessions.find((session) => session.isOutputVolume);
 	const appSessions = sessions.filter((session) => !session.isOutputVolume && !isBlacklistedSession(session));
 	const groups = new Map<string, MixerSession[]>();
@@ -515,10 +515,8 @@ function compareSessions(left: MixerSession, right: MixerSession): number {
 		return priorityComparison;
 	}
 
-	const audibleTimestampRank = compareLastAudibleAt(left, right);
-	if (audibleTimestampRank !== 0) {
-		return audibleTimestampRank;
-	}
+	// Keep slot identity stable when audio starts, stops, or alternates.
+	// Activity still drives icon dimming, but never app ordering.
 
 	const labelRank = baseLabel(left).localeCompare(baseLabel(right), undefined, { sensitivity: "base" });
 	if (labelRank !== 0) {
@@ -555,10 +553,6 @@ function comparePriorityRank(left: MixerSession, right: MixerSession): number {
 	}
 
 	return leftRank - rightRank;
-}
-
-function compareLastAudibleAt(left: MixerSession, right: MixerSession): number {
-	return (right.lastAudibleAt ?? 0) - (left.lastAudibleAt ?? 0);
 }
 
 function priorityRank(session: MixerSession): number {
