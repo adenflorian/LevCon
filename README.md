@@ -28,6 +28,7 @@ The plugin currently exposes these Stream Deck actions:
 
 The `Mixer Slot` property inspector exposes global settings for:
 
+- `Volume curve` - Linear (default) or Logarithmic. Logarithmic maps dial travel exponentially onto Windows volume percentages for finer control near silence, with a minimum 1% change per turn. Displayed values remain Windows volume percentages.
 - `Per-app volume limits` - one `app, minimum, maximum` rule per line (for example `spotify, 1, 100`). The first case-insensitive app/process name match wins. Defaults to 0–100. Limits apply when turning a dial; press to mute independently. External volume changes are not restricted.
 - `Step Size` - knob increment size for volume changes
 - `Priority List` - preferred app ordering matchers

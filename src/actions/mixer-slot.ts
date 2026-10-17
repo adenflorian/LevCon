@@ -35,6 +35,7 @@ let globalSettingsLoaded: Promise<void> | undefined;
 
 streamDeck.settings.onDidReceiveGlobalSettings<MixerGlobalSettings>((ev) => {
 	globalStepSize = clampStepSize(ev.settings.stepSize);
+	mixerRuntime.volumeCurve = ev.settings.volumeCurve === "logarithmic" ? "logarithmic" : "linear";
 	audioSessionProvider.setVolumeLimits(ev.settings.volumeLimits);
 	audioSessionProvider.setPriorityMatchers(ev.settings.priorityMatchers);
 	audioSessionProvider.setBlacklistMatchers(ev.settings.blacklistMatchers);
@@ -495,6 +496,7 @@ async function ensureGlobalSettingsLoaded(): Promise<void> {
 		globalSettingsLoaded = streamDeck.settings.getGlobalSettings<MixerGlobalSettings>()
 			.then((settings) => {
 				globalStepSize = clampStepSize(settings.stepSize);
+				mixerRuntime.volumeCurve = settings.volumeCurve === "logarithmic" ? "logarithmic" : "linear";
 				audioSessionProvider.setVolumeLimits(settings.volumeLimits);
 				audioSessionProvider.setPriorityMatchers(settings.priorityMatchers);
 				audioSessionProvider.setBlacklistMatchers(settings.blacklistMatchers);

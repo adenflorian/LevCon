@@ -16,6 +16,9 @@ test('settings round trip preserves other settings and validates user input', ()
  assert.equal(messages.at(-1).payload.showOutputVolume, false);
  assert.equal(messages.at(-1).payload.volumeCurve, 'logarithmic');
  assert.equal(messages.at(-1).payload.volumeLimits[0].min, 1);
+ nodes.get('volumeCurve').value = 'linear';
+ vm.runInContext('persistGlobalSettings()', context);
+ assert.equal(messages.at(-1).payload.volumeCurve, 'linear');
  nodes.get('volumeLimits').value = 'spotify, 90, 10';
  const count = messages.length;
  vm.runInContext('persistGlobalSettings()', context);

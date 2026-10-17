@@ -18,6 +18,8 @@ let actionContext;
 let actionUuid;
 let showOutputVolume = true;
 let savedGlobalSettings = {};
+const volumeCurveInput = document.getElementById("volumeCurve");
+volumeCurveInput.addEventListener("change", persistGlobalSettings);
 const volumeLimitsInput = document.getElementById("volumeLimits");
 volumeLimitsInput.addEventListener("change", persistGlobalSettings);
 
@@ -98,10 +100,11 @@ function applyActionSettings(settings) {}
  */
 function applyGlobalSettings(settings) {
   savedGlobalSettings = settings;
-  volumeLimitsInput.value = (Array.isArray(settings.volumeLimits) ? settings.volumeLimits : [])
-    .filter(rule => typeof rule?.matcher === "string" && rule.matcher.trim())
-    .map(rule => `${rule.matcher}, ${rule.min}, ${rule.max}`)
-    .join("\n");
+  volumeCurveInput.value = settings.volumeCurve === "logarithmic" ? "logarithmic" : "linear";
+  volumeLimitsInput.value = (Array.isArray(settings.volumeLimits) ? settings.volumeLimits : [])
+    .filter(rule => typeof rule?.matcher === "string" && rule.matcher.trim())
+    .map(rule => `${rule.matcher}, ${rule.min}, ${rule.max}`)
+    .join("\n");
   showOutputVolume =
     typeof settings.showOutputVolume === "boolean"
       ? settings.showOutputVolume
@@ -168,6 +171,7 @@ function currentActionSettings() {
 function currentGlobalSettings() {
   return {
     ...savedGlobalSettings,
+    volumeCurve: volumeCurveInput.value,
     volumeLimits: parseVolumeLimits(),
     stepSize: clampNumber(elements.stepSizeNumber.value, 1, 25, 2),
     priorityMatchers: parsePriorityMatchers(elements.priorityMatchers.value),
