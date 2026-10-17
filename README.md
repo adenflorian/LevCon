@@ -28,6 +28,7 @@ The plugin currently exposes these Stream Deck actions:
 
 The `Mixer Slot` property inspector exposes global settings for:
 
+- `Per-app volume limits` - one `app, minimum, maximum` rule per line (for example `spotify, 1, 100`). The first case-insensitive app/process name match wins. Defaults to 0–100. Limits apply when turning a dial; press to mute independently. External volume changes are not restricted.
 - `Step Size` - knob increment size for volume changes
 - `Priority List` - preferred app ordering matchers
 - `Blacklist` - sessions to exclude from the UI

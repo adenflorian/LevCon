@@ -50,7 +50,7 @@ static object ExecuteCommand(string command, string[] commandArgs)
   return command switch
   {
     "list" => ListSessions(),
-    "adjust-volume" => AdjustVolume(GetRequiredOption(commandArgs, "--id"), ParseInt(GetRequiredOption(commandArgs, "--delta"))),
+    "adjust-volume" => AdjustVolume(GetRequiredOption(commandArgs, "--id"), ParseInt(GetRequiredOption(commandArgs, "--delta")), ParseInt(GetOption(commandArgs, "--min") ?? "0"), ParseInt(GetOption(commandArgs, "--max") ?? "100")),
     "toggle-mute" => ToggleMute(GetRequiredOption(commandArgs, "--id")),
     _ => throw new InvalidOperationException($"Unknown command '{command}'."),
   };
@@ -93,18 +93,20 @@ static string[] BuildCommandArgs(HelperRequest request)
   return request.Command switch
   {
     "list" => ["--visibility", request.Visibility ?? "all"],
-    "adjust-volume" => ["--id", request.Id ?? throw new InvalidOperationException("Missing id."), "--delta", (request.Delta ?? throw new InvalidOperationException("Missing delta.")).ToString()],
+    "adjust-volume" => ["--id", request.Id ?? throw new InvalidOperationException("Missing id."), "--delta", (request.Delta ?? throw new InvalidOperationException("Missing delta.")).ToString(), "--min", (request.Min ?? 0).ToString(), "--max", (request.Max ?? 100).ToString()],
     "toggle-mute" => ["--id", request.Id ?? throw new InvalidOperationException("Missing id.")],
     _ => [],
   };
 }
 
-static object AdjustVolume(string sessionId, int delta)
+static object AdjustVolume(string sessionId, int delta, int min, int max)
 {
+  min = Math.Clamp(min, 0, 100);
+  max = Math.Clamp(max, min, 100);
   if (sessionId == EndpointVolumeSessionId)
   {
     using var device = GetDefaultRenderDevice();
-    var endpointTargetVolume = Math.Clamp((int)Math.Round(device.AudioEndpointVolume.MasterVolumeLevelScalar * 100f) + delta, 0, 100);
+    var endpointTargetVolume = Math.Clamp((int)Math.Round(device.AudioEndpointVolume.MasterVolumeLevelScalar * 100f) + delta, min, max);
     device.AudioEndpointVolume.MasterVolumeLevelScalar = endpointTargetVolume / 100f;
     if (endpointTargetVolume > 0)
     {
@@ -120,7 +122,7 @@ static object AdjustVolume(string sessionId, int delta)
     return new MutationResult(false);
   }
 
-  var targetVolume = Math.Clamp((int)Math.Round(session.SimpleAudioVolume.Volume * 100f) + delta, 0, 100);
+  var targetVolume = Math.Clamp((int)Math.Round(session.SimpleAudioVolume.Volume * 100f) + delta, min, max);
   session.SimpleAudioVolume.Volume = targetVolume / 100f;
   if (targetVolume > 0)
   {
@@ -153,20 +155,34 @@ static string BuildDisplayName(AudioSessionControl session)
 
 static string? BuildIconDataUri(AudioSessionControl session)
 {
-  var processPath = GetSessionProcessPath(session);
-  if (string.IsNullOrWhiteSpace(processPath) || !File.Exists(processPath))
-  {
-    return null;
-  }
+  // Prefer an app-provided icon resource; protected games may deny process access.
+  var sessionIcon = TryReadIcon(session.IconPath);
+  return sessionIcon ?? TryReadIcon(GetSessionProcessPath(session));
+}
 
+static string? TryReadIcon(string? location)
+{
+  if (string.IsNullOrWhiteSpace(location)) return null;
+  var path = Environment.ExpandEnvironmentVariables(location.Trim().TrimStart('@'));
+  var index = 0;
+  var comma = path.LastIndexOf(',');
+  if (comma >= 0 && int.TryParse(path[(comma + 1)..].Trim(), out var resourceIndex))
+  {
+    index = resourceIndex;
+    path = path[..comma];
+  }
+  path = path.Trim().Trim('"');
+  if (!File.Exists(path)) return null;
+
+  IntPtr large = IntPtr.Zero;
+  IntPtr small = IntPtr.Zero;
   try
   {
-    using Icon? icon = Icon.ExtractAssociatedIcon(processPath);
-    if (icon is null)
-    {
-      return null;
-    }
-
+    NativeMethods.ExtractIconEx(path, index, out large, out small, 1);
+    var handle = large != IntPtr.Zero ? large : small;
+  if (handle == IntPtr.Zero && index != 0) return null;
+  using Icon? icon = handle != IntPtr.Zero ? (Icon)Icon.FromHandle(handle).Clone() : Icon.ExtractAssociatedIcon(path);
+    if (icon is null) return null;
     using var bitmap = icon.ToBitmap();
     using var stream = new MemoryStream();
     bitmap.Save(stream, ImageFormat.Png);
@@ -175,6 +191,11 @@ static string? BuildIconDataUri(AudioSessionControl session)
   catch
   {
     return null;
+  }
+  finally
+  {
+    if (large != IntPtr.Zero) NativeMethods.DestroyIcon(large);
+    if (small != IntPtr.Zero && small != large) NativeMethods.DestroyIcon(small);
   }
 }
 
@@ -392,6 +413,17 @@ static string? TryGetProcessPath(uint processId)
     return null;
   }
 
+  // PROCESS_QUERY_LIMITED_INFORMATION works when reading MainModule is denied.
+  using (var handle = NativeMethods.OpenProcess(0x1000, false, processId))
+  {
+    if (!handle.IsInvalid)
+    {
+      var buffer = new StringBuilder(32768);
+      var length = buffer.Capacity;
+      if (NativeMethods.QueryFullProcessImageName(handle, 0, buffer, ref length)) return buffer.ToString();
+    }
+  }
+
   try
   {
     using var process = Process.GetProcessById((int)processId);
@@ -451,7 +483,9 @@ record HelperRequest(
   string Command,
   string? Visibility,
   string? Id,
-  int? Delta
+  int? Delta,
+  int? Min,
+  int? Max
 );
 
 record SessionDto(
@@ -482,6 +516,20 @@ static class HelperCache
 
 static class NativeMethods
 {
+  [DllImport("kernel32.dll", SetLastError = true)]
+  internal static extern Microsoft.Win32.SafeHandles.SafeProcessHandle OpenProcess(uint access, bool inheritHandle, uint processId);
+
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "QueryFullProcessImageNameW", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  internal static extern bool QueryFullProcessImageName(Microsoft.Win32.SafeHandles.SafeProcessHandle process, uint flags, StringBuilder name, ref int size);
+
+  [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "ExtractIconExW")]
+  internal static extern uint ExtractIconEx(string file, int index, out IntPtr large, out IntPtr small, uint count);
+
+  [DllImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  internal static extern bool DestroyIcon(IntPtr icon);
+
   [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "QueryDosDeviceW")]
   internal static extern uint QueryDosDevice(string deviceName, StringBuilder targetPath, int maxLength);
 }
