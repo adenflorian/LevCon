@@ -98,7 +98,10 @@ function applyActionSettings(settings) {}
  */
 function applyGlobalSettings(settings) {
   savedGlobalSettings = settings;
-  volumeLimitsInput.value = (Array.isArray(settings.volumeLimits) ? settings.volumeLimits : []).map(rule => `${rule.matcher}, ${rule.min}, ${rule.max}`).join("\n");
+  volumeLimitsInput.value = (Array.isArray(settings.volumeLimits) ? settings.volumeLimits : [])
+    .filter(rule => typeof rule?.matcher === "string" && rule.matcher.trim())
+    .map(rule => `${rule.matcher}, ${rule.min}, ${rule.max}`)
+    .join("\n");
   showOutputVolume =
     typeof settings.showOutputVolume === "boolean"
       ? settings.showOutputVolume
