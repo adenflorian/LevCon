@@ -91,6 +91,11 @@
             <span>Logarithmic gives finer control at low volumes. Step Size controls travel along the curve; the display shows Windows volume %.</span>
         </label>
         <label>
+            <span>Per-app volume limits (app, minimum %, maximum %)</span>
+            <textarea id="volumeLimits" rows="4" placeholder="spotify, 1, 100"></textarea>
+            <span>One rule per line; first matching app name wins. Dial limits do not affect the mute button.</span>
+        </label>
+        <label>
             <span>Priority List</span>
             <textarea id="priorityMatchers" rows="5" placeholder="discord&#10;chrome&#10;spotify"></textarea>
         </label>

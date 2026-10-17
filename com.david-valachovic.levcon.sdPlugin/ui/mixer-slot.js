@@ -20,6 +20,8 @@ let showOutputVolume = true;
 let savedGlobalSettings = {};
 const volumeCurveInput = document.getElementById("volumeCurve");
 volumeCurveInput.addEventListener("change", persistGlobalSettings);
+const volumeLimitsInput = document.getElementById("volumeLimits");
+volumeLimitsInput.addEventListener("change", persistGlobalSettings);
 
 /**
  * @type {{ stepSizeNumber: HTMLInputElement; stepSizeRange: HTMLInputElement; priorityMatchers: HTMLTextAreaElement; blacklistMatchers: HTMLTextAreaElement; }}
@@ -99,6 +101,10 @@ function applyActionSettings(settings) {}
 function applyGlobalSettings(settings) {
   savedGlobalSettings = settings;
   volumeCurveInput.value = settings.volumeCurve === "logarithmic" ? "logarithmic" : "linear";
+  volumeLimitsInput.value = (Array.isArray(settings.volumeLimits) ? settings.volumeLimits : [])
+    .filter(rule => typeof rule?.matcher === "string" && rule.matcher.trim())
+    .map(rule => `${rule.matcher}, ${rule.min}, ${rule.max}`)
+    .join("\n");
   showOutputVolume =
     typeof settings.showOutputVolume === "boolean"
       ? settings.showOutputVolume
@@ -166,6 +172,7 @@ function currentGlobalSettings() {
   return {
     ...savedGlobalSettings,
     volumeCurve: volumeCurveInput.value,
+    volumeLimits: parseVolumeLimits(),
     stepSize: clampNumber(elements.stepSizeNumber.value, 1, 25, 2),
     priorityMatchers: parsePriorityMatchers(elements.priorityMatchers.value),
     blacklistMatchers: parsePriorityMatchers(elements.blacklistMatchers.value),
@@ -190,6 +197,7 @@ function persistActionSettings() {
 }
 
 function persistGlobalSettings() {
+  if (!validateVolumeLimits()) return;
   const settings = currentGlobalSettings();
   send({
     event: "setGlobalSettings",
@@ -222,4 +230,20 @@ function send(payload) {
 function setMirroredValue(rangeInput, numberInput, value) {
   rangeInput.value = `${value}`;
   numberInput.value = `${value}`;
+}
+
+function parseVolumeLimits() {
+  return volumeLimitsInput.value.split(/\r?\n/).filter(line => line.trim()).map(line => {
+    const [matcher, min, max] = line.split(',').map(part => part.trim());
+    return { matcher, min: Number(min), max: Number(max) };
+  });
+}
+function validateVolumeLimits() {
+  const valid = volumeLimitsInput.value.split(/\r?\n/).filter(line => line.trim()).every(line => {
+    const parts = line.split(',').map(part => part.trim());
+    return parts.length === 3 && parts.every(Boolean) && Number.isInteger(Number(parts[1])) && Number.isInteger(Number(parts[2])) && Number(parts[1]) >= 0 && Number(parts[2]) <= 100 && Number(parts[1]) <= Number(parts[2]);
+  });
+  volumeLimitsInput.setCustomValidity(valid ? '' : 'Use app, minimum, maximum with whole percentages from 0 to 100 and minimum <= maximum.');
+  volumeLimitsInput.reportValidity();
+  return valid;
 }

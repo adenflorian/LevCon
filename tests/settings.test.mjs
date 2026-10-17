@@ -19,4 +19,12 @@ test('settings round trip preserves other settings and validates user input', ()
  nodes.get('volumeCurve').value = 'linear';
  vm.runInContext('persistGlobalSettings()', context);
  assert.equal(messages.at(-1).payload.volumeCurve, 'linear');
+ nodes.get('volumeLimits').value = 'spotify, 90, 10';
+ const count = messages.length;
+ vm.runInContext('persistGlobalSettings()', context);
+ assert.equal(messages.length, count);
+ assert.ok(nodes.get('volumeLimits').error);
+ nodes.get('volumeLimits').value = '';
+ vm.runInContext('persistGlobalSettings()', context);
+ assert.equal(messages.at(-1).payload.volumeLimits.length, 0);
 });

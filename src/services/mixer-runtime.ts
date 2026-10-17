@@ -49,13 +49,16 @@ class MixerRuntime {
 		}
 
 		delta = curvedVolumeDelta(view.session.volume, delta, this.volumeCurve);
+		const { min, max } = audioSessionProvider.getVolumeLimits(view.session.id);
+		const volume = Math.max(min, Math.min(max, view.session.volume + delta));
+		delta = volume - view.session.volume;
 		audioSessionProvider.setOptimisticSessionState(view.session);
 		audioSessionProvider.applyOptimisticVolumeChange(view.session.id, delta);
 		void this.adjustVolumeImmediately(deviceId, view.session.id, delta);
 		return {
 			...view.session,
-			volume: Math.max(0, Math.min(100, view.session.volume + delta)),
-			muted: view.session.volume + delta > 0 ? false : view.session.muted,
+			volume,
+			muted: volume > 0 ? false : view.session.muted,
 		};
 	}
 
