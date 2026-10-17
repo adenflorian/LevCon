@@ -3,6 +3,8 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Management;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NAudio.CoreAudioApi;
@@ -140,7 +142,7 @@ static string BuildDisplayName(AudioSessionControl session)
     return session.DisplayName;
   }
 
-  var processName = TryGetProcessName(session.GetProcessID);
+  var processName = BuildProcessName(session);
   if (!string.IsNullOrWhiteSpace(processName))
   {
     return processName;
@@ -151,7 +153,7 @@ static string BuildDisplayName(AudioSessionControl session)
 
 static string? BuildIconDataUri(AudioSessionControl session)
 {
-  var processPath = TryGetProcessPath(session.GetProcessID);
+  var processPath = GetSessionProcessPath(session);
   if (string.IsNullOrWhiteSpace(processPath) || !File.Exists(processPath))
   {
     return null;
@@ -178,7 +180,21 @@ static string? BuildIconDataUri(AudioSessionControl session)
 
 static string BuildProcessName(AudioSessionControl session)
 {
-  return TryGetProcessName(session.GetProcessID) ?? string.Empty;
+  var processPath = GetSessionProcessPath(session);
+  if (!string.IsNullOrWhiteSpace(processPath))
+  {
+    return Path.GetFileName(processPath);
+  }
+
+  try
+  {
+    using var process = Process.GetProcessById((int)session.GetProcessID);
+    return process.ProcessName + ".exe";
+  }
+  catch
+  {
+    return string.Empty;
+  }
 }
 
 static MMDevice GetDefaultRenderDevice()
@@ -319,12 +335,51 @@ static object ToggleMute(string sessionId)
   return new MutationResult(true);
 }
 
-static string? TryGetProcessName(uint processId)
+static string? GetSessionProcessPath(AudioSessionControl session)
 {
-  var processPath = TryGetProcessPath(processId);
+  var processPath = TryGetProcessPath(session.GetProcessID);
   if (!string.IsNullOrWhiteSpace(processPath))
   {
-    return Path.GetFileName(processPath);
+    return processPath;
+  }
+
+  // Protected games can deny module access while Core Audio still exposes
+  // their executable in the session identifier. Read the icon from disk.
+  var identifier = session.GetSessionIdentifier;
+  var start = identifier?.IndexOf('|') ?? -1;
+  var end = start >= 0 ? identifier!.IndexOf("%b", start + 1, StringComparison.Ordinal) : -1;
+  if (start < 0 || end <= start + 1)
+  {
+    return null;
+  }
+
+  var sessionPath = identifier![(start + 1)..end];
+  if (!sessionPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+  {
+    return null;
+  }
+
+  if (sessionPath.StartsWith(@"\Device\", StringComparison.OrdinalIgnoreCase))
+  {
+    foreach (var drive in Environment.GetLogicalDrives())
+    {
+      var deviceName = new StringBuilder(32768);
+      if (NativeMethods.QueryDosDevice(drive[..2], deviceName, deviceName.Capacity) != 0)
+      {
+        var prefix = deviceName.ToString() + @"\";
+        if (sessionPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+          return drive + sessionPath[prefix.Length..];
+        }
+      }
+    }
+
+    return null;
+  }
+
+  if (sessionPath.Length > 3 && char.IsLetter(sessionPath[0]) && sessionPath[1] == ':' && sessionPath[2] == '\\')
+  {
+    return sessionPath;
   }
 
   return null;
@@ -423,4 +478,10 @@ record SessionListResult(SessionDto Endpoint, IReadOnlyList<SessionDto> Sessions
 static class HelperCache
 {
   public static readonly Dictionary<uint, string?> ProcessCommandLineById = [];
+}
+
+static class NativeMethods
+{
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "QueryDosDeviceW")]
+  internal static extern uint QueryDosDevice(string deviceName, StringBuilder targetPath, int maxLength);
 }
